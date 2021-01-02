@@ -9,21 +9,6 @@ import Foundation
 import ArgumentParser
 
 
-struct IPAddress: Codable, RawRepresentable, ExpressibleByArgument {
-    var rawValue: String
-}
-
-
-struct IPv4Lookup {
-
-    typealias IPv4DataDecoder = (Data) -> IPAddress?
-    
-    let endpoint: URL
-    let decode: IPv4DataDecoder
-
-}
-
-
 enum IPv4Lookups: CaseIterable {
 
     case googleWifi, amazonAWS, ipEcho, ipInfo, ipIfy

@@ -5,10 +5,24 @@
 //  Created by Michael Thingnes on 28/12/20.
 //
 
+import CoreFoundation
 import Foundation
 import Logging
 
-struct Config {
+
+struct ConfigError: Error {
+    
+    enum ErrorKind {
+        case encodingError
+        case decodingError
+    }
+    
+    let kind: ErrorKind
+    let localizedDescription: String
+}
+
+
+class Config {
         
     private var configDict: [String : Any]
     private var url: URL
@@ -60,14 +74,27 @@ struct Config {
         Logger.shared.info("Config path: \(self.url.path)")
     }
     
-    private func encode(completion: @escaping () -> Void = {}) {
-        DispatchQueue.global(qos: .background).async {
-            guard let plistData = try? PropertyListSerialization.data(fromPropertyList: configDict, format: .xml, options: .zero) else { return }
-            try? plistData.write(to: url)
-            DispatchQueue.main.async {
-                completion()
-            }
+    private func encode(onSuccess: @escaping () -> Void = {}, onError: @escaping (_: Error) -> Void = {_ in}) {
+        var plistData: Data? = nil
+        do {
+            plistData = try PropertyListSerialization.data(fromPropertyList: configDict, format: .xml, options: .zero)
+        } catch {
+            onError(error)
+            return
         }
+
+        if let plistData = plistData {
+            do {
+                try plistData.write(to: url)
+            } catch {
+                onError(error)
+                return
+            }
+        } else {
+            onError(ConfigError(kind: .encodingError, localizedDescription: "Failed to encode and store config data"))
+            return
+        }
+        onSuccess()
     }
     
     /**
@@ -83,21 +110,43 @@ struct Config {
     }
     
     /**
-     -setObject:forKey: immediately stores a value (or removes the value if nil is passed as the value), then asynchronously stores the value persistently, where it is made available to other processes.
+     -setObject:forKey: immediately stores a value (or removes the value if nil is passed as the value)
      */
-    mutating func set(_ value: Any?, forKey key: String, completion: @escaping () -> Void = {}) {
+    func set(_ value: Any?, forKey key: String) {
         if value == nil {
             removeObject(forKey: key)
             return
         }
         configDict[key] = value
-        encode(completion: completion)
+        encode()
+    }
+    
+    /**
+     -setObject:forKey: immediately stores a value (or removes the value if nil is passed as the value), then asynchronously stores the value persistently, where it is made available to other processes.
+     */
+    func set(_ value: Any?, forKey key: String, onSuccess: @escaping () -> Void, onError: @escaping (_: Error) -> Void) {
+        if value == nil {
+            removeObject(forKey: key, onSuccess: onSuccess, onError: onError)
+            return
+        }
+        configDict[key] = value
+        DispatchQueue.global(qos: .background).async {
+            self.encode(onSuccess: onSuccess, onError: onError)
+        }
     }
     
     /// -removeObjectForKey: is equivalent to -[... setObject:nil forKey:defaultName]
-    mutating func removeObject(forKey key: String, completion: @escaping () -> Void = {}) {
+    func removeObject(forKey key: String) {
         configDict.removeValue(forKey: key)
-        encode(completion: completion)
+        encode()
+    }
+    
+    /// -asyncRemoveObjectForKey: is equivalent to -[... asyncSetObject:nil forKey:defaultName]
+    func removeObject(forKey key: String, onSuccess: @escaping () -> Void, onError: @escaping (_: Error) -> Void) {
+        configDict.removeValue(forKey: key)
+        DispatchQueue.global(qos: .background).async {
+            self.encode(onSuccess: onSuccess, onError: onError)
+        }
     }
     
     func string(forKey key: String) -> String? {

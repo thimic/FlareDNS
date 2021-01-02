@@ -53,7 +53,7 @@ struct DataLoader {
 }
 
 extension DataLoader {
-    mutating func authorize(with token: AccessToken) {
+    mutating func authorize(with token: ApiToken) {
         headers["Authorization"] = "Bearer \(token.rawValue)"
     }
 }
