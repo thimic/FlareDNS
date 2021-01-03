@@ -111,14 +111,18 @@
          </CommandLineArgument>
          <CommandLineArgument
             argument = "auth"
-            isEnabled = "YES">
+            isEnabled = "NO">
          </CommandLineArgument>
          <CommandLineArgument
             argument = "set"
-            isEnabled = "YES">
+            isEnabled = "NO">
          </CommandLineArgument>
          <CommandLineArgument
             argument = "foo"
+            isEnabled = "NO">
+         </CommandLineArgument>
+         <CommandLineArgument
+            argument = "check"
             isEnabled = "YES">
          </CommandLineArgument>
       </CommandLineArguments>

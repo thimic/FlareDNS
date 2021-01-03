@@ -34,7 +34,7 @@ struct FlareDNSCommand: ParsableCommand {
         
         static let configuration = CommandConfiguration(
             abstract: "Configure FlareDNS before running",
-            subcommands: [Auth.self, Records.self, Run.self]
+            subcommands: [Auth.self, Records.self, Run.self, Check.self]
         )
         
     }

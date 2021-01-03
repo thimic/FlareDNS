@@ -5,21 +5,8 @@
 //  Created by Michael Thingnes on 28/12/20.
 //
 
-import CoreFoundation
 import Foundation
 import Logging
-
-
-struct ConfigError: Error {
-    
-    enum ErrorKind {
-        case encodingError
-        case decodingError
-    }
-    
-    let kind: ErrorKind
-    let localizedDescription: String
-}
 
 
 class Config {
@@ -74,7 +61,7 @@ class Config {
         Logger.shared.info("Config path: \(self.url.path)")
     }
     
-    private func encode(onSuccess: @escaping () -> Void = {}, onError: @escaping (_: Error) -> Void = {_ in}) {
+    private func encode(onError: @escaping (Error) -> Void = {_ in}) {
         var plistData: Data? = nil
         do {
             plistData = try PropertyListSerialization.data(fromPropertyList: configDict, format: .xml, options: .zero)
@@ -91,10 +78,9 @@ class Config {
                 return
             }
         } else {
-            onError(ConfigError(kind: .encodingError, localizedDescription: "Failed to encode and store config data"))
+            onError(FlareDNSError("Failed to encode and store config data"))
             return
         }
-        onSuccess()
     }
     
     /**
@@ -124,14 +110,14 @@ class Config {
     /**
      -setObject:forKey: immediately stores a value (or removes the value if nil is passed as the value), then asynchronously stores the value persistently, where it is made available to other processes.
      */
-    func set(_ value: Any?, forKey key: String, onSuccess: @escaping () -> Void, onError: @escaping (_: Error) -> Void) {
+    func set(_ value: Any?, forKey key: String, onError: @escaping (Error) -> Void) {
         if value == nil {
-            removeObject(forKey: key, onSuccess: onSuccess, onError: onError)
+            removeObject(forKey: key, onError: onError)
             return
         }
         configDict[key] = value
         DispatchQueue.global(qos: .background).async {
-            self.encode(onSuccess: onSuccess, onError: onError)
+            self.encode(onError: onError)
         }
     }
     
@@ -142,10 +128,10 @@ class Config {
     }
     
     /// -asyncRemoveObjectForKey: is equivalent to -[... asyncSetObject:nil forKey:defaultName]
-    func removeObject(forKey key: String, onSuccess: @escaping () -> Void, onError: @escaping (_: Error) -> Void) {
+    func removeObject(forKey key: String, onError: @escaping (Error) -> Void) {
         configDict.removeValue(forKey: key)
         DispatchQueue.global(qos: .background).async {
-            self.encode(onSuccess: onSuccess, onError: onError)
+            self.encode(onError: onError)
         }
     }
     

@@ -18,12 +18,12 @@ let package = Package(
         .target(
             name: "FlareDNS",
             dependencies: [
-                .product(name: "Logging", package: "swift-log"),
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
                 .product(name: "ColorizeSwift", package: "ColorizeSwift"),
+                .product(name: "Logging", package: "swift-log"),
+//                .product(name: "PromiseKit", package: "PromiseKit"),
             ],
-            exclude: ["requests.swift"]),
-//            dependencies: ["PromiseKit"]),
+            exclude: ["Network/Requests.swift"]),
         .testTarget(
             name: "FlareDNSTests",
             dependencies: ["FlareDNS"],

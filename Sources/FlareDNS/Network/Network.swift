@@ -10,6 +10,89 @@ import FoundationNetworking
 let apiURL = URL(string: "https://api.cloudflare.com/client/v4/")!
 
 
+struct CloudFlareAPI {
+    
+    static let shared = CloudFlareAPI()
+    
+    var apiURLComponents: URLComponents {
+        var components = URLComponents()
+        components.scheme = "https"
+        components.host = "api.cloudflare.com"
+        components.path = "/client/v4"
+        return components
+    }
+    
+    func listDNSRecords(zone: Zone, completion: @escaping ([DNSRecord]) -> Void) {
+        guard let token = FlareDNSModel.shared.apiToken else {
+            Logger.shared.error("API token missing. Please set one using \"flare-dns configure auth set <token>\"")
+            return
+        }
+        guard let zoneID = zone.id else {
+            Logger.shared.error("Missing zone ID for zone \"\(zone.name)\"")
+            return
+        }
+        let endpoint = apiURL.appendingPathComponent("zones/\(zoneID)/dns_records")
+        var dataLoader = DataLoader()
+        dataLoader.authorize(with: token)
+        dataLoader.loadData(from: endpoint) { result in
+            switch result {
+            case .success(let data):
+                
+                struct ResponseBody: Decodable {
+                    let result: [DNSRecordResponse]
+                }
+                
+                Logger.shared.info("\(String(data: data, encoding: .utf8) ?? "Unable to parse response body")")
+            case .failure(let error):
+                Logger.shared.error("Failed to list records: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    func listZones(zoneNames: [String], completion: @escaping (Result<[Zone], Error>) -> Void) {
+        guard let token = FlareDNSModel.shared.apiToken else {
+            Logger.shared.error("API token missing. Please set one using the \"flare-dns configure auth set <token>\" command.")
+            return
+        }
+        
+        var components = apiURLComponents
+        components.path = URL(string: components.path)!.appendingPathComponent("zones").path
+        components.queryItems = [
+            URLQueryItem(name: "name", value: zoneNames.joined(separator: ","))
+        ]
+        guard let url = components.url else {
+            Logger.shared.error("Unable to construct valid URL with \(components)")
+            return
+        }
+        var dataLoader = DataLoader()
+        dataLoader.authorize(with: token)
+        dataLoader.loadData(from: url) { result in
+            switch result {
+            case .success(let data):
+
+                struct ResponseBody: Decodable {
+                    let result: [Zone]
+                }
+                
+                let decoder = JSONDecoder()
+                do {
+                    let responseBody = try decoder.decode(ResponseBody.self, from: data)
+                    completion(Result.success(responseBody.result))
+                } catch {
+                    completion(Result.failure(error))
+                }
+                
+            case .failure(let error):
+                completion(Result.failure(error))
+                
+            }
+        }
+        
+    }
+    
+}
+
+
 struct DataLoader {
 
     typealias Handler = (Result<Data, Error>) -> Void
@@ -87,6 +170,7 @@ func listDNSRecords(zone: Zones) {
         }
     }
 }
+
 
 struct DNSRecordBody: Codable {
     

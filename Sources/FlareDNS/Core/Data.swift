@@ -72,10 +72,6 @@ struct DNSRecord: Codable, Equatable {
     var ttl: Int = 1  // 1 = automatic
     var priority: Int = 0
     var proxied: Bool = true
-    
-    var description: String {
-        "\"\(name).\(zone.name)\""
-    }
 
 }
 
