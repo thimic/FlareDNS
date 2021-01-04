@@ -7,6 +7,7 @@
 
 import ArgumentParser
 import ColorizeSwift
+import CoreFoundation
 import Foundation
 import Logging
 
@@ -43,20 +44,9 @@ extension FlareDNSCommand.Configure {
     struct Check: ParsableCommand {
         
         static let configuration = CommandConfiguration(
-            abstract: "Check configuration. Connects to Cloudflare with configured credentials and checks that the records are available and editable."
+            abstract: "Check configuration. Connects to Cloudflare with configured credentials and checks that the records are available and editable.",
+            subcommands: [Config.self, IP.self]
         )
-        
-        func run() throws {
-            print("Starting checks".blue())
-            FlareDNSController.shared.check(completion: { result in
-                switch result {
-                case .success(let message):
-                    print(message.green())
-                case .failure(let error):
-                    print(error.localizedDescription.red())
-                }
-            })
-        }
         
     }
     

@@ -7,7 +7,7 @@ let package = Package(
     name: "FlareDNS",
     dependencies: [
         // Dependencies declare other packages that this package depends on.
-//        .package(url: "https://github.com/mxcl/PromiseKit", from: "6.0.0"),
+        .package(url: "https://github.com/mxcl/PromiseKit", from: "6.13.0"),
         .package(url: "https://github.com/apple/swift-log.git", from: "1.4.0"),
         .package(url: "https://github.com/apple/swift-argument-parser", from: "0.3.0"),
         .package(url: "https://github.com/mtynior/ColorizeSwift.git", from: "1.5.0"),
@@ -21,9 +21,9 @@ let package = Package(
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
                 .product(name: "ColorizeSwift", package: "ColorizeSwift"),
                 .product(name: "Logging", package: "swift-log"),
-//                .product(name: "PromiseKit", package: "PromiseKit"),
-            ],
-            exclude: ["Network/Requests.swift"]),
+                .product(name: "PromiseKit", package: "PromiseKit"),
+            ]
+        ),
         .testTarget(
             name: "FlareDNSTests",
             dependencies: ["FlareDNS"],

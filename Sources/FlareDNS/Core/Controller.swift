@@ -5,87 +5,85 @@
 //  Created by Michael Thingnes on 2/01/21.
 //
 
-import CoreFoundation
 import Foundation
 import Logging
+import PromiseKit
 
 
 struct FlareDNSController {
+        
+    let model: FlareDNSModel
+    let cloudflareAPI: CloudFlareAPI
     
-    static let shared = FlareDNSController()
-    
-    func run() {
-        CFRunLoopRun()
+    init?() {
+        model = FlareDNSModel.shared
+        guard let apiToken = model.apiToken else {
+            return nil
+        }
+        cloudflareAPI = CloudFlareAPI(apiToken: apiToken)
     }
     
-    func check(completion: @escaping (Result<String, Error>) -> Void) {
-        var zoneNames: Set<String> = []
-        for record in FlareDNSModel.shared.records {
-            zoneNames.insert(record.zone.name)
-        }
-        if zoneNames.isEmpty {
-            completion(Result.failure(FlareDNSError("No records have been added to the configuration")))
-            Logger.shared.warning("No records have been added to the configuration")
-            return
-        }
-        CloudFlareAPI.shared.listZones(
-            zoneNames: zoneNames.sorted(),
-            completion: { result in
-                switch result {
-                case .success(let zones):
-                    let resultZoneNames = zones.map({ (zone: Zone) -> String in
+    func run() {
+
+    }
+    
+    private func checkZones() -> Promise<[Zone]> {
+        return Promise { seal in
+            cloudflareAPI.listZones(zoneNames: FlareDNSModel.shared.configZoneNames.sorted())
+                .done { zones in
+                    let resultZoneNames = zones.map { zone in
                         return zone.name
-                    })
-                    if zoneNames.sorted() != resultZoneNames.sorted() {
-                        completion(Result.failure(
-                            FlareDNSError(
-                                "Expected data for zone(s) [\(zoneNames.sorted().joined(separator: ", "))], " +
-                                "but only received data for zone(s) [\(resultZoneNames.sorted().joined(separator: ", "))]"
-                            )
-                        ))
-                    } else {
-                        FlareDNSModel.shared.zones = zones
-                        completion(Result.success("Successfully fetched data for zones"))
                     }
-                case .failure(let error):
-                    completion(Result.failure(error))
+                    guard FlareDNSModel.shared.configZoneNames.sorted() == resultZoneNames.sorted() else {
+                        seal.reject(FlareDNSError(
+                            "Expected data for zone(s) [\(FlareDNSModel.shared.configZoneNames.sorted().joined(separator: ", "))], " +
+                            "but only received data for zone(s) [\(resultZoneNames.sorted().joined(separator: ", "))]"
+                        ))
+                        return
+                    }
+                    seal.fulfill(zones)
                 }
-                DispatchQueue.main.async {
-                    CFRunLoopStop(RunLoop.current.getCFRunLoop())
+                .catch { error in
+                    seal.reject(error)
                 }
+        }
+    }
+    
+    private func checkRecords(_ zones: [Zone]) -> Promise<[DNSRecordResponse]> {
+        return Promise { seal in
+            when(fulfilled: zones.map(cloudflareAPI.listDNSRecords))
+                .done { records in
+                    seal.fulfill(records.flatMap { $0 })
+                }
+                .catch { error in
+                    seal.reject(error)
+                }
+        }
+    }
+    
+    func check() -> Promise<String> {
+        return Promise { seal in
+            
+            guard !FlareDNSModel.shared.configZoneNames.isEmpty else {
+                seal.reject(FlareDNSError("No records have been added to the configuration"))
+                return
             }
-        )
-        
-//        for zoneName in zoneNames {
-//            CloudFlareAPI.shared.listDNSRecords(
-//                zone: zoneName,
-//                completion: { result in
-//                    switch result {
-//                    case .success(let zones):
-//                        let resultZoneNames = zones.map({ (zone: Zone) -> String in
-//                            return zone.name
-//                        })
-//                        if zoneNames.sorted() != resultZoneNames.sorted() {
-//                            completion(Result.failure(
-//                                FlareDNSError(
-//                                    "Expected data for zone(s) [\(zoneNames.sorted().joined(separator: ", "))], " +
-//                                    "but only received data for zone(s) [\(resultZoneNames.sorted().joined(separator: ", "))]"
-//                                )
-//                            ))
-//                        } else {
-//                            completion(Result.success("Successfully fetched data for zones"))
-//                        }
-//                    case .failure(let error):
-//                        completion(Result.failure(error))
-//                    }
-//                    DispatchQueue.main.async {
-//                        CFRunLoopStop(RunLoop.current.getCFRunLoop())
-//                    }
-//                }
-//            )
-//        }
-        
-        CFRunLoopRun()
+            
+            firstly {
+                checkZones()
+            }
+            .then { zones in
+                checkRecords(zones)
+            }
+            .done { records in
+                print(records)
+                seal.fulfill("Done!")
+            }
+            .catch { error in
+                seal.reject(error)
+            }
+            
+        }
     }
     
 }

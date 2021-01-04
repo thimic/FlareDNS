@@ -48,7 +48,6 @@ extension FlareDNSModel {
         
         // Persist records
         persistRecords()
-        Logger.shared.info("Removed record \"\(filteredRecords.first!.name)\"")
         return Result.success("Removed record \"\(filteredRecords.first!.name)\"")
 
     }
@@ -71,7 +70,7 @@ extension FlareDNSModel {
     private func persistRecords() {
         let encoder = PropertyListEncoder()
         
-        var dataArray = [Data]()
+        var dataArray: [Data] = []
         for record in records {
             var encodedRecord: Data? = nil
             do {

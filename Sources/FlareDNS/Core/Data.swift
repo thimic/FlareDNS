@@ -19,15 +19,7 @@ struct IPAddress: Codable, RawRepresentable, ExpressibleByArgument {
 }
 
 
-struct IPv4Lookup {
-    typealias IPv4DataDecoder = (Data) -> IPAddress?
-    
-    let endpoint: URL
-    let decode: IPv4DataDecoder
-}
-
-
-struct Zone: Codable, Equatable {
+struct Zone: Codable, Equatable, Hashable {
     
     let name: String
     var id: String? = nil
@@ -42,9 +34,14 @@ struct ZoneListResponse: Codable, Equatable {
 }
 
 
+enum DNSRecordTypes: String, Codable, CaseIterable, ExpressibleByArgument {
+    case A, AAAA, CNAME, MX, TXT
+}
+
+
 struct DNSRecord: Codable, Equatable {
     
-    init(zone: Zone, name: String, type: Types = .A, ttl: Int = 1, priority: Int = 0, proxied: Bool = true) {
+    init(zone: Zone, name: String, type: DNSRecordTypes = .A, ttl: Int = 1, priority: Int = 0, proxied: Bool = true) {
         self.zone = zone
         self.name = name
         self.type = type
@@ -53,7 +50,7 @@ struct DNSRecord: Codable, Equatable {
         self.proxied = proxied
     }
     
-    init(zoneName: String, recordName: String, type: Types = .A, ttl: Int = 1, priority: Int = 0, proxied: Bool = true) {
+    init(zoneName: String, recordName: String, type: DNSRecordTypes = .A, ttl: Int = 1, priority: Int = 0, proxied: Bool = true) {
         self.zone = Zone(name: zoneName)
         self.name = recordName
         self.type = type
@@ -62,28 +59,35 @@ struct DNSRecord: Codable, Equatable {
         self.proxied = proxied
     }
     
-    enum Types: String, Codable, CaseIterable, ExpressibleByArgument {
-        case A, AAAA, CNAME
-    }
-    
     var zone: Zone
+    var id: String? = nil
     let name: String
-    var type: Types = .A
+    var type: DNSRecordTypes = .A
     var ttl: Int = 1  // 1 = automatic
     var priority: Int = 0
     var proxied: Bool = true
+    
+    func createRequest(ip: IPAddress) -> DNSRecordRequest {
+        DNSRecordRequest(type: type, name: name, content: ip, ttl: ttl, proxied: proxied)
+    }
 
+}
+
+
+struct DNSRecordRequest: Codable {
+    
+    var type: DNSRecordTypes
+    let name: String
+    var content: IPAddress
+    var ttl: Int = 1800
+    let proxied: Bool
 }
 
 
 struct DNSRecordResponse: Codable, Equatable {
     
-    enum Types: String, Codable, CaseIterable, ExpressibleByArgument {
-        case A, AAAA, CNAME
-    }
-    
     let id: String
-    let type: Types
+    let type: DNSRecordTypes
     let name: String
     let content: String
     let proxiable: Bool
@@ -93,5 +97,19 @@ struct DNSRecordResponse: Codable, Equatable {
     let zoneID: String
     let zoneName: String
     let modifiedOn: String
+    
+    enum CodingKeys: String, CodingKey {
+        case id
+        case type
+        case name
+        case content
+        case proxiable
+        case proxied
+        case ttl
+        case locked
+        case zoneID = "zone_id"
+        case zoneName = "zone_name"
+        case modifiedOn = "modified_on"
+    }
 
 }

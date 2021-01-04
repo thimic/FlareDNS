@@ -106,7 +106,7 @@ extension FlareDNSCommand.Configure.Records {
         
         @Argument(help: "Cloudflare Zone name") var zoneName: String
         @Argument(help: "DNS record name; use @ for root") var recordName: String
-        @Option(name: .shortAndLong, help: "DNS record type") var recordType: DNSRecord.Types
+        @Option(name: .shortAndLong, help: "DNS record type") var recordType: DNSRecordTypes
         @Option(name: .shortAndLong, help: "Time To Live in seconds") var ttl: Int = 1800
         @Flag(help: "Proxy traffic through CloudFlare") var proxied: Bool = false
         
