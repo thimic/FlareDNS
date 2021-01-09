@@ -21,15 +21,33 @@ struct FlareDNSModel {
             return ApiToken(rawValue: token)
         }
         set {
-            if newValue?.rawValue != Config.shared.string(forKey: "config:auth:apiToken") {
-                Config.shared.set(newValue?.rawValue, forKey: "config:auth:apiToken")
-                Logger.shared.info("API token was set")
+            guard newValue?.rawValue == Config.shared.string(forKey: "config:auth:apiToken") else {
+                Logger.shared.info("New API token value is identical to the previous")
+                return
             }
-            Logger.shared.info("New API token value is identical to the previous")
+            Config.shared.set(newValue?.rawValue, forKey: "config:auth:apiToken")
+            Logger.shared.info("API token was set")
+        }
+    }
+    var updateInterval: Int {
+        get {
+            let configUpdateInterval = Config.shared.integer(forKey: "config:run:updateInterval")
+            guard configUpdateInterval != 0 else {
+                return 1800
+            }
+            return configUpdateInterval
+        }
+        set {
+            guard newValue != Config.shared.integer(forKey: "config:run:updateInterval") else {
+                Logger.shared.info("New update interval is identical to the previous")
+                return
+            }
+            Config.shared.set(newValue, forKey: "config:run:updateInterval")
+            Logger.shared.info("Update interval was set to \(updateInterval)")
         }
     }
     var records: [DNSRecord]
-    var zones: [Zone]? = nil
+    private (set) var zones: [Zone]? = nil
     
     init() {
         
@@ -47,4 +65,5 @@ struct FlareDNSModel {
             self.records = [DNSRecord]()
         }
     }
+    
 }

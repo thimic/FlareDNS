@@ -12,7 +12,7 @@ import PromiseKit
 
 struct FlareDNSController {
         
-    let model: FlareDNSModel
+    var model: FlareDNSModel
     let cloudflareAPI: CloudFlareAPI
     
     init?() {
@@ -23,20 +23,46 @@ struct FlareDNSController {
         cloudflareAPI = CloudFlareAPI(apiToken: apiToken)
     }
     
-    func run() {
-
+    private func updateRecords() -> Promise<String> {
+        return Promise { seal in
+            firstly {
+                when(fulfilled: model.getRecordsWithIds(cloudflareAPI), IPv4LookupAPI.shared.getIP())
+            }
+            .then { records, ip in
+                when(fulfilled: records.map({ record in cloudflareAPI.updateDNSRecord(record: record, ip: ip) }))
+            }
+            .done { reports in
+                seal.fulfill(reports.joined(separator: "\n"))
+            }
+            .catch { error in
+                seal.reject(error)
+            }
+        }
+    }
+    
+    @available(OSX 10.12, *)
+    func run() -> Promise<String> {
+        return Promise { seal in
+            updateRecords()
+                .done { message in
+                    seal.fulfill(message)
+                }
+                .catch{ error in
+                    seal.reject(error)
+                }
+        }
     }
     
     private func checkZones() -> Promise<[Zone]> {
         return Promise { seal in
-            cloudflareAPI.listZones(zoneNames: FlareDNSModel.shared.configZoneNames.sorted())
+            cloudflareAPI.listZones(zoneNames: model.configZoneNames.sorted())
                 .done { zones in
                     let resultZoneNames = zones.map { zone in
                         return zone.name
                     }
-                    guard FlareDNSModel.shared.configZoneNames.sorted() == resultZoneNames.sorted() else {
+                    guard model.configZoneNames.sorted() == resultZoneNames.sorted() else {
                         seal.reject(FlareDNSError(
-                            "Expected data for zone(s) [\(FlareDNSModel.shared.configZoneNames.sorted().joined(separator: ", "))], " +
+                            "Expected data for zone(s) [\(model.configZoneNames.sorted().joined(separator: ", "))], " +
                             "but only received data for zone(s) [\(resultZoneNames.sorted().joined(separator: ", "))]"
                         ))
                         return
@@ -64,20 +90,18 @@ struct FlareDNSController {
     private func checkRecords(_ records: [DNSRecordResponse]) -> Promise<[DNSRecordResponse]> {
         return Promise { seal in
             
-            var validRecords: [DNSRecordResponse] = []
             var invalidRecords: [String] = []
             var lockedRecords: [String] = []
             
-            for record in FlareDNSModel.shared.records {
-                guard let apiRecord = records.filter({ apiRecord in apiRecord.name == record.name }).first else {
-                    invalidRecords.append(record.name)
+            for configRecord in model.records {
+                guard let apiRecord = records.filter({ apiRecord in apiRecord.name == configRecord.name }).first else {
+                    invalidRecords.append(configRecord.name)
                     continue
                 }
                 guard !apiRecord.locked else {
-                    lockedRecords.append(record.name)
+                    lockedRecords.append(configRecord.name)
                     continue
                 }
-                validRecords.append(apiRecord)
             }
 
             guard invalidRecords.isEmpty else {
@@ -89,14 +113,14 @@ struct FlareDNSController {
                 seal.reject(FlareDNSError("The following records are locked in the Cloudflare API and cannot be edited: \n - \(lockedRecords.joined(separator: "\n - "))"))
                 return
             }
-            seal.fulfill(validRecords)
+            seal.fulfill(records)
         }
     }
     
     func check() -> Promise<String> {
         return Promise { seal in
             
-            guard !FlareDNSModel.shared.configZoneNames.isEmpty else {
+            guard !model.configZoneNames.isEmpty else {
                 seal.reject(FlareDNSError("No records have been added to the configuration"))
                 return
             }
@@ -111,7 +135,6 @@ struct FlareDNSController {
                 checkRecords(records)
             }
             .done { records in
-                print(records)
                 seal.fulfill("Done!")
             }
             .catch { error in

@@ -14,7 +14,7 @@ struct ApiToken: Codable, RawRepresentable {
 }
 
 
-struct IPAddress: Codable, RawRepresentable, ExpressibleByArgument {
+struct DNSContent: Codable, RawRepresentable, ExpressibleByArgument {
     var rawValue: String
 }
 
@@ -67,7 +67,7 @@ struct DNSRecord: Codable, Equatable {
     var priority: Int = 0
     var proxied: Bool = true
     
-    func createRequest(ip: IPAddress) -> DNSRecordRequest {
+    func createRequest(ip: DNSContent) -> DNSRecordRequest {
         DNSRecordRequest(type: type, name: name, content: ip, ttl: ttl, proxied: proxied)
     }
 
@@ -78,7 +78,7 @@ struct DNSRecordRequest: Codable {
     
     var type: DNSRecordTypes
     let name: String
-    var content: IPAddress
+    var content: DNSContent
     var ttl: Int = 1800
     let proxied: Bool
 }

@@ -23,4 +23,5 @@ extension FlareDNSModel {
     var configZoneNames: [String] {
         configZones.map { zone in zone.name }
     }
+    
 }

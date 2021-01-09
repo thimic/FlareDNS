@@ -7,6 +7,7 @@
 
 import Foundation
 import Logging
+import PromiseKit
 
 
 extension FlareDNSModel {
@@ -30,7 +31,7 @@ extension FlareDNSModel {
         persistRecords()
     }
     
-    mutating func removeRecord(recordName: String) -> Result<String, Error> {
+    mutating func removeRecord(recordName: String) -> Swift.Result<String, Error> {
         
         // Remove record with same name if it exists
         let filteredRecords = records.filter { (existingRecord) -> Bool in
@@ -41,14 +42,14 @@ extension FlareDNSModel {
             let index = records.firstIndex(of: oldRecord)!
             records.remove(at: index)
         } else {
-            return Result.failure(
+            return Swift.Result.failure(
                 FlareDNSError("No records matching record name \"\(recordName)\"")
             )
         }
         
         // Persist records
         persistRecords()
-        return Result.success("Removed record \"\(filteredRecords.first!.name)\"")
+        return Swift.Result.success("Removed record \"\(filteredRecords.first!.name)\"")
 
     }
     
@@ -85,6 +86,33 @@ extension FlareDNSModel {
         }
         Config.shared.set(dataArray, forKey: "config:records:records")
 
+    }
+        
+    func getRecordsWithIds(_ cloudFlareAPI: CloudFlareAPI) -> Promise<[DNSRecord]> {
+        return Promise { seal in
+            cloudFlareAPI.listZones(zoneNames: configZoneNames)
+                .thenFlatMap { zone in
+                    cloudFlareAPI.listDNSRecords(zone: zone)
+                }
+                .done { apiRecords in
+                    var updatedRecords: [DNSRecord] = records
+                    for (index, configRecord) in updatedRecords.enumerated() {
+                        guard let apiRecord = apiRecords.filter({ record in record.name == configRecord.name }).first else {
+                            // TODO: Reject?
+                            Logger.shared.warning("Unable to find record \(configRecord.name) at Cloudflare")
+                            continue
+                        }
+                        var newRecord = configRecord
+                        newRecord.zone.id = apiRecord.zoneID
+                        newRecord.id = apiRecord.id
+                        updatedRecords[index] = newRecord
+                    }
+                    seal.fulfill(updatedRecords)
+                }
+                .catch { error in
+                    seal.reject(error)
+                }
+        }
     }
     
 }

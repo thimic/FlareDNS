@@ -16,7 +16,7 @@ struct IPv4LookupAPI {
     
     private let requestManager = RequestManager()
     
-    private func getIpFromLookup(_ lookup: Lookups) -> Promise<IPAddress> {
+    private func getIpFromLookup(_ lookup: Lookups) -> Promise<DNSContent> {
         return Promise { seal in
             requestManager.get(from: lookup.value.endpoint)
                 .done { data in
@@ -32,12 +32,12 @@ struct IPv4LookupAPI {
         }
     }
     
-    func getIP() -> Promise<IPAddress> {
+    func getIP() -> Promise<DNSContent> {
         var attempts = 0
-        func attempt() -> Promise<IPAddress> {
+        func attempt() -> Promise<DNSContent> {
             let lookup = Lookups.allCases[attempts]
             attempts += 1
-            return getIpFromLookup(lookup).recover { error -> Promise<IPAddress> in
+            return getIpFromLookup(lookup).recover { error -> Promise<DNSContent> in
                 Logger.shared.warning("Unable to look up IP using \(lookup.value.endpoint)")
                 guard attempts < Lookups.allCases.count else { throw error }
                 return attempt()
@@ -55,7 +55,7 @@ extension IPv4LookupAPI {
         case googleWifi, amazonAWS, ipEcho, ipInfo, ipIfy
         
         struct IPv4Lookup {
-            typealias IPv4DataDecoder = (Data) -> IPAddress?
+            typealias IPv4DataDecoder = (Data) -> DNSContent?
             
             let endpoint: URL
             let decode: IPv4DataDecoder
@@ -67,7 +67,7 @@ extension IPv4LookupAPI {
                 return IPv4Lookup(endpoint: URL(string: "http://onhub.here/api/v1/status")!) { data in
                     
                     struct Wan: Codable {
-                        let localIpAddress: IPAddress
+                        let localIpAddress: DNSContent
                     }
                     
                     struct GoogleWifi: Codable {
@@ -81,22 +81,22 @@ extension IPv4LookupAPI {
             case .amazonAWS:
                 return IPv4Lookup(endpoint: URL(string: "https://checkip.amazonaws.com")!) { data in
                     guard let string = String(data: data, encoding: .utf8) else { return nil }
-                    return IPAddress(rawValue: string.trimmingCharacters(in: .whitespacesAndNewlines))
+                    return DNSContent(rawValue: string.trimmingCharacters(in: .whitespacesAndNewlines))
                 }
             case .ipEcho:
                 return IPv4Lookup(endpoint: URL(string: "http://ipecho.net/plain")!) { data in
                     guard let string = String(data: data, encoding: .utf8) else { return nil }
-                    return IPAddress(rawValue: string.trimmingCharacters(in: .whitespacesAndNewlines))
+                    return DNSContent(rawValue: string.trimmingCharacters(in: .whitespacesAndNewlines))
                 }
             case .ipInfo:
                 return IPv4Lookup(endpoint: URL(string: "http://ipinfo.io/ip")!) { data in
                     guard let string = String(data: data, encoding: .utf8) else { return nil }
-                    return IPAddress(rawValue: string.trimmingCharacters(in: .whitespacesAndNewlines))
+                    return DNSContent(rawValue: string.trimmingCharacters(in: .whitespacesAndNewlines))
                 }
             case .ipIfy:
                 return IPv4Lookup(endpoint: URL(string: "https://api.ipify.org")!) { data in
                     guard let string = String(data: data, encoding: .utf8) else { return nil }
-                    return IPAddress(rawValue: string.trimmingCharacters(in: .whitespacesAndNewlines))
+                    return DNSContent(rawValue: string.trimmingCharacters(in: .whitespacesAndNewlines))
                 }
             }
         }

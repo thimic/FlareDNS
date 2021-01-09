@@ -80,7 +80,7 @@ extension FlareDNSCommand.Configure.Records {
                 record.type.rawValue,
                 record.name,
                 record.zone.name,
-                "\(record.ttl)",
+                record.ttl == 1 ? "auto" : "\(record.ttl)",
                 "\(record.priority)",
                 "\(record.proxied)"
             )
@@ -107,10 +107,14 @@ extension FlareDNSCommand.Configure.Records {
         @Argument(help: "Cloudflare Zone name") var zoneName: String
         @Argument(help: "DNS record name; use @ for root") var recordName: String
         @Option(name: .shortAndLong, help: "DNS record type") var recordType: DNSRecordTypes
-        @Option(name: .shortAndLong, help: "Time To Live in seconds") var ttl: Int = 1800
+        @Option(name: .shortAndLong, help: "Time To Live in seconds: 1 for auto, otherwise 120 to 2,147,483,647 seconds") var ttl: Int = 1
         @Flag(help: "Proxy traffic through CloudFlare") var proxied: Bool = false
         
         func run() {
+            guard ttl == 1 || (120...2147483647).contains(ttl) else {
+                print("TTL must be between 120 and 2,147,483,647 seconds, or 1 for Automatic.".yellow())
+                return
+            }
             let name = resolveRecordName(zoneName: zoneName, recordName: recordName)
             let record = DNSRecord(zoneName: zoneName, recordName: name, type: recordType, ttl: ttl, proxied: proxied)
             FlareDNSModel.shared.addRecord(record)

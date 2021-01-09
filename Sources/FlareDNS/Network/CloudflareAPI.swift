@@ -103,7 +103,7 @@ struct CloudFlareAPI {
     /// - Parameters:
     ///   - record: Cloudflare record to update
     ///   - ip:     IP address to update record with
-    func updateDNSRecord(record: DNSRecord, ip: IPAddress) -> Promise<String> {
+    func updateDNSRecord(record: DNSRecord, ip: DNSContent) -> Promise<String> {
         return Promise { seal in
             
             guard let zoneId = record.zone.id else {
@@ -127,7 +127,6 @@ struct CloudFlareAPI {
                 seal.reject(FlareDNSError("Unable to encode request body: \(record)"))
                 return
             }
-            
             requestManager.put(from: url, httpBody: requestBody)
                 .done { data in
                     seal.fulfill("Record \"\(record.name)\" was updated with IP \(ip.rawValue)")
