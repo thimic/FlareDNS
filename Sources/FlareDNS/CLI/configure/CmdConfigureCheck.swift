@@ -18,6 +18,7 @@ extension FlareDNSCommand.Configure.Check {
                 
         func run() throws {
             guard let controller = FlareDNSController() else {
+                print("Unable to start checks: No API token was set.".red())
                 return
             }
             print("Starting checks".blue())

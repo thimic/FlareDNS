@@ -49,7 +49,7 @@ struct FlareDNSController {
         }
     }
     
-    private func checkRecords(_ zones: [Zone]) -> Promise<[DNSRecordResponse]> {
+    private func getRecords(_ zones: [Zone]) -> Promise<[DNSRecordResponse]> {
         return Promise { seal in
             when(fulfilled: zones.map(cloudflareAPI.listDNSRecords))
                 .done { records in
@@ -58,6 +58,38 @@ struct FlareDNSController {
                 .catch { error in
                     seal.reject(error)
                 }
+        }
+    }
+    
+    private func checkRecords(_ records: [DNSRecordResponse]) -> Promise<[DNSRecordResponse]> {
+        return Promise { seal in
+            
+            var validRecords: [DNSRecordResponse] = []
+            var invalidRecords: [String] = []
+            var lockedRecords: [String] = []
+            
+            for record in FlareDNSModel.shared.records {
+                guard let apiRecord = records.filter({ apiRecord in apiRecord.name == record.name }).first else {
+                    invalidRecords.append(record.name)
+                    continue
+                }
+                guard !apiRecord.locked else {
+                    lockedRecords.append(record.name)
+                    continue
+                }
+                validRecords.append(apiRecord)
+            }
+
+            guard invalidRecords.isEmpty else {
+                seal.reject(FlareDNSError("The following records are not available via the Cloudflare API: \n - \(invalidRecords.joined(separator: "\n - "))"))
+                return
+            }
+            
+            guard lockedRecords.isEmpty else {
+                seal.reject(FlareDNSError("The following records are locked in the Cloudflare API and cannot be edited: \n - \(lockedRecords.joined(separator: "\n - "))"))
+                return
+            }
+            seal.fulfill(validRecords)
         }
     }
     
@@ -73,7 +105,10 @@ struct FlareDNSController {
                 checkZones()
             }
             .then { zones in
-                checkRecords(zones)
+                getRecords(zones)
+            }
+            .then { records in
+                checkRecords(records)
             }
             .done { records in
                 print(records)
