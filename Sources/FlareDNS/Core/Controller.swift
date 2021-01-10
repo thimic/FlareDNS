@@ -23,12 +23,14 @@ struct FlareDNSController {
         cloudflareAPI = CloudFlareAPI(apiToken: apiToken)
     }
     
-    private func updateRecords() -> Promise<[String]> {
+    @available(OSX 10.12, *)
+    func run() -> Promise<[String]> {
         return Promise { seal in
             firstly {
                 when(fulfilled: model.getRecordsWithIds(cloudflareAPI), IPv4LookupAPI.shared.getIP())
             }
             .then { records, ip in
+                // FIXME: Don't update record if IP is unchanged!
                 when(fulfilled: records.map({ record in cloudflareAPI.updateDNSRecord(record: record, ip: ip) }))
             }
             .done { reports in
@@ -37,19 +39,6 @@ struct FlareDNSController {
             .catch { error in
                 seal.reject(error)
             }
-        }
-    }
-    
-    @available(OSX 10.12, *)
-    func run() -> Promise<[String]> {
-        return Promise { seal in
-            updateRecords()
-                .done { messages in
-                    seal.fulfill(messages)
-                }
-                .catch{ error in
-                    seal.reject(error)
-                }
         }
     }
     

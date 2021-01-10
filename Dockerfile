@@ -16,4 +16,4 @@ RUN mkdir bin && \
 
 VOLUME [ "/config" ]
 
-CMD ["FlareDNS"]
+CMD ["FlareDNS", "run"]
