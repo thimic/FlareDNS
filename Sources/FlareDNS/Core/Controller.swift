@@ -27,10 +27,10 @@ struct FlareDNSController {
     func run() -> Promise<[String]> {
         return Promise { seal in
             firstly {
-                when(fulfilled: model.getRecordsWithIds(cloudflareAPI), IPv4LookupAPI.shared.getIP())
+                when(fulfilled: model.getRecordsWithIds(cloudflareAPI), getIP())
             }
             .then { records, ip in
-                when(fulfilled: records.map({ record in updateDNSRecord(record: record, ip: ip) }))
+                when(fulfilled: records.map({ record in cloudflareAPI.updateDNSRecord(record: record, ip: ip) }))
             }
             .done { reports in
                 seal.fulfill(reports)
@@ -41,15 +41,24 @@ struct FlareDNSController {
         }
     }
     
-    private func updateDNSRecord(record: DNSRecord, ip: DNSContent) -> Promise<String> {
-        // TODO: Check for force flag
-        if let oldIp = model.ip {
-            if ip == oldIp {
-                return Promise.value("IP is unchanged, skipping update for \"\(record.name)\"")
-            }
+    private func getIP() -> Promise<DNSContent> {
+        return Promise { seal in
+            IPv4LookupAPI.shared.getIP()
+                .done { ip in
+                    // TODO: Check for force flag
+                    if let oldIp = model.ip {
+                        if ip == oldIp {
+                            // TODO: Pass through a special error and handle its case for a nicer log output
+                            return seal.reject(FlareDNSError("IP is unchanged, skipping update"))
+                        }
+                    }
+                    model.ip = ip
+                    seal.fulfill(ip)
+                }
+                .catch { error in
+                    seal.reject(error)
+                }
         }
-        model.ip = ip
-        return cloudflareAPI.updateDNSRecord(record: record, ip: ip)
     }
     
     private func checkZones() -> Promise<[Zone]> {
