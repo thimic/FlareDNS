@@ -9,7 +9,7 @@ import Foundation
 import Logging
 
 
-struct FlareDNSModel {
+class FlareDNSModel {
     
     static var shared = FlareDNSModel()
     
@@ -45,6 +45,8 @@ struct FlareDNSModel {
             Logger.shared.info("Update interval was set to \(updateInterval)")
         }
     }
+    
+    var ip: DNSContent? = nil
     var records: [DNSRecord]
     private (set) var zones: [Zone]? = nil
     

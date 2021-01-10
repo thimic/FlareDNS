@@ -30,8 +30,7 @@ struct FlareDNSController {
                 when(fulfilled: model.getRecordsWithIds(cloudflareAPI), IPv4LookupAPI.shared.getIP())
             }
             .then { records, ip in
-                // FIXME: Don't update record if IP is unchanged!
-                when(fulfilled: records.map({ record in cloudflareAPI.updateDNSRecord(record: record, ip: ip) }))
+                when(fulfilled: records.map({ record in updateDNSRecord(record: record, ip: ip) }))
             }
             .done { reports in
                 seal.fulfill(reports)
@@ -40,6 +39,17 @@ struct FlareDNSController {
                 seal.reject(error)
             }
         }
+    }
+    
+    private func updateDNSRecord(record: DNSRecord, ip: DNSContent) -> Promise<String> {
+        // TODO: Check for force flag
+        if let oldIp = model.ip {
+            if ip == oldIp {
+                return Promise.value("IP is unchanged, skipping update for \"\(record.name)\"")
+            }
+        }
+        model.ip = ip
+        return cloudflareAPI.updateDNSRecord(record: record, ip: ip)
     }
     
     private func checkZones() -> Promise<[Zone]> {

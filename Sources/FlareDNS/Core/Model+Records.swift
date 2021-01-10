@@ -12,7 +12,7 @@ import PromiseKit
 
 extension FlareDNSModel {
     
-    mutating func addRecord(_ record: DNSRecord) {
+    func addRecord(_ record: DNSRecord) {
         
         // Remove record with same zone and name if it exists
         let filteredRecords = records.filter { (existingRecord) -> Bool in
@@ -31,7 +31,7 @@ extension FlareDNSModel {
         persistRecords()
     }
     
-    mutating func removeRecord(recordName: String) -> Swift.Result<String, Error> {
+    func removeRecord(recordName: String) -> Swift.Result<String, Error> {
         
         // Remove record with same name if it exists
         let filteredRecords = records.filter { (existingRecord) -> Bool in
@@ -63,7 +63,7 @@ extension FlareDNSModel {
         return nil
     }
     
-    mutating func removeAllRecords() {
+    func removeAllRecords() {
         records.removeAll()
         persistRecords()
     }
@@ -95,7 +95,7 @@ extension FlareDNSModel {
                     cloudFlareAPI.listDNSRecords(zone: zone)
                 }
                 .done { apiRecords in
-                    var updatedRecords: [DNSRecord] = records
+                    var updatedRecords: [DNSRecord] = .init(self.records)
                     for (index, configRecord) in updatedRecords.enumerated() {
                         guard let apiRecord = apiRecords.filter({ record in record.name == configRecord.name }).first else {
                             // TODO: Reject?
