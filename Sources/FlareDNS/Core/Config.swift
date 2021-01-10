@@ -31,6 +31,20 @@ class Config {
                 }
                 urls.append(configURL)
             }
+            #if os(macOS)
+            if let homeDir = env["HOME"] {
+                let homeURL = URL(fileURLWithPath: homeDir)
+                let prefsURL = homeURL
+                                .appendingPathComponent("Library")
+                                .appendingPathComponent("Preferences")
+                                .appendingPathComponent(configFileName)
+                if FileManager.default.fileExists(atPath: prefsURL.path) {
+                    print("prefsURL exists! \(prefsURL)")
+                    return prefsURL
+                }
+                urls.append(prefsURL)
+            }
+            #endif
             
             for configURL in urls {
                 do {

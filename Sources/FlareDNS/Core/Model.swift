@@ -21,12 +21,11 @@ struct FlareDNSModel {
             return ApiToken(rawValue: token)
         }
         set {
-            guard newValue?.rawValue == Config.shared.string(forKey: "config:auth:apiToken") else {
+            guard newValue?.rawValue != Config.shared.string(forKey: "config:auth:apiToken") else {
                 Logger.shared.info("New API token value is identical to the previous")
                 return
             }
             Config.shared.set(newValue?.rawValue, forKey: "config:auth:apiToken")
-            Logger.shared.info("API token was set")
         }
     }
     var updateInterval: Int {
