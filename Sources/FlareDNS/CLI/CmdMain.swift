@@ -7,7 +7,6 @@
 
 import ArgumentParser
 import ColorizeSwift
-import CoreFoundation
 import Foundation
 import Logging
 import PromiseKit
@@ -31,17 +30,16 @@ struct FlareDNSCommand: ParsableCommand {
             firstly {
                 controller.run()
             }
-            .done { message in
-                print(message.green())
+            .done { messages in
+                for message in messages {
+                    Logger.shared.info("\(message.cyan())")
+                }
             }
             .catch { error in
-                print("\(error)".red())
+                Logger.shared.error("\("\(error)".red())")
             }
             .finally {
-                print("---")
-//                DispatchQueue.main.async {
-//                    CFRunLoopStop(RunLoop.current.getCFRunLoop())
-//                }
+                Logger.shared.info("---")
             }
         }
         
@@ -58,14 +56,19 @@ struct FlareDNSCommand: ParsableCommand {
                 print("FlareDNS has not been configured with any DNS records. Aborting.".yellow())
                 return
             }
-            print("Starting FlareDNS".blue())
-            print("---")
+            Logger.shared.info("\("Starting FlareDNS".bold())")
+            Logger.shared.info("---")
 
             // TODO: Move timer to controller?
             start(controller)
-            _ = Timer.scheduledTimer(withTimeInterval: TimeInterval(FlareDNSModel.shared.updateInterval), repeats: true) { _ in start(controller) }
+            _ = Timer.scheduledTimer(
+                withTimeInterval: TimeInterval(FlareDNSModel.shared.updateInterval),
+                repeats: true
+            ) { _ in
+                start(controller)
+            }
 
-            CFRunLoopRun()
+            RunLoop.main.run()
         }
         
     }

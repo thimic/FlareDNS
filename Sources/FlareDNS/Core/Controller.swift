@@ -23,7 +23,7 @@ struct FlareDNSController {
         cloudflareAPI = CloudFlareAPI(apiToken: apiToken)
     }
     
-    private func updateRecords() -> Promise<String> {
+    private func updateRecords() -> Promise<[String]> {
         return Promise { seal in
             firstly {
                 when(fulfilled: model.getRecordsWithIds(cloudflareAPI), IPv4LookupAPI.shared.getIP())
@@ -32,7 +32,7 @@ struct FlareDNSController {
                 when(fulfilled: records.map({ record in cloudflareAPI.updateDNSRecord(record: record, ip: ip) }))
             }
             .done { reports in
-                seal.fulfill(reports.joined(separator: "\n"))
+                seal.fulfill(reports)
             }
             .catch { error in
                 seal.reject(error)
@@ -41,11 +41,11 @@ struct FlareDNSController {
     }
     
     @available(OSX 10.12, *)
-    func run() -> Promise<String> {
+    func run() -> Promise<[String]> {
         return Promise { seal in
             updateRecords()
-                .done { message in
-                    seal.fulfill(message)
+                .done { messages in
+                    seal.fulfill(messages)
                 }
                 .catch{ error in
                     seal.reject(error)

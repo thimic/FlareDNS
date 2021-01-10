@@ -7,7 +7,6 @@
 
 import ArgumentParser
 import ColorizeSwift
-import CoreFoundation
 import Foundation
 import Logging
 

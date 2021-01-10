@@ -6,9 +6,7 @@
 //
 
 import ArgumentParser
-import CoreFoundation
 import Foundation
-
 
 extension FlareDNSCommand.Configure.Check {
     
@@ -31,11 +29,9 @@ extension FlareDNSCommand.Configure.Check {
                     print("\(error)".red())
                 }
                 .finally {
-                    DispatchQueue.main.async {
-                        CFRunLoopStop(RunLoop.current.getCFRunLoop())
-                    }
+                    Foundation.exit(0)
                 }
-            CFRunLoopRun()
+            RunLoop.main.run()
         }
         
     }
@@ -53,11 +49,9 @@ extension FlareDNSCommand.Configure.Check {
                     print("Unable to obtain IP address: \(error)")
                 }
                 .finally {
-                    DispatchQueue.main.async {
-                        CFRunLoopStop(RunLoop.current.getCFRunLoop())
-                    }
+                    Foundation.exit(0)
                 }
-            CFRunLoopRun()
+            RunLoop.main.run()
         }
         
     }
