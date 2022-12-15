@@ -7,11 +7,6 @@ final class FlareDNSTests: XCTestCase {
         // Use XCTAssert and related functions to verify your tests produce the correct
         // results.
 
-        // Some of the APIs that we use below are available in macOS 10.13 and above.
-        guard #available(macOS 10.13, *) else {
-            return
-        }
-
         let fooBinary = productsDirectory.appendingPathComponent("FlareDNS")
 
         let process = Process()

@@ -1,5 +1,5 @@
 //
-//  File.swift
+//  FlareDNSModel+Zones.swift
 //  
 //
 //  Created by Michael Thingnes on 3/01/21.

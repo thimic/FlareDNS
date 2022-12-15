@@ -1,5 +1,5 @@
 //
-//  File.swift
+//  Logger+FlareDNS.swift
 //  
 //
 //  Created by Michael Thingnes on 28/12/20.

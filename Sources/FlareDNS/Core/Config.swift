@@ -13,9 +13,8 @@ class Config {
         
     private var configDict: [String : Any]
     private var url: URL
-    
-    init() {
-        
+
+    init(fileManager: FileManager = .default) {
         let configFileName = "FlareDNS.plist"
         
         func getURL() -> URL {
@@ -26,29 +25,25 @@ class Config {
                 guard let configDirPath = env[configDir] else { continue }
                 var configURL = URL(fileURLWithPath: configDirPath)
                 configURL.appendPathComponent(configFileName)
-                if FileManager.default.fileExists(atPath: configURL.path) {
+                if fileManager.fileExists(atPath: configURL.path) {
                     return configURL
                 }
                 urls.append(configURL)
             }
             #if os(macOS)
-            if let homeDir = env["HOME"] {
-                let homeURL = URL(fileURLWithPath: homeDir)
-                let prefsURL = homeURL
-                                .appendingPathComponent("Library")
-                                .appendingPathComponent("Preferences")
-                                .appendingPathComponent(configFileName)
-                if FileManager.default.fileExists(atPath: prefsURL.path) {
-                    print("prefsURL exists! \(prefsURL)")
-                    return prefsURL
-                }
-                urls.append(prefsURL)
+            let prefsURL = URL.libraryDirectory
+                .appendingPathComponent("Preferences")
+                .appendingPathComponent(configFileName)
+            if fileManager.fileExists(atPath: prefsURL.path) {
+                print("prefsURL exists! \(prefsURL)")
+                return prefsURL
             }
+            urls.append(prefsURL)
             #endif
             
             for configURL in urls {
                 do {
-                    try FileManager.default.createDirectory(
+                    try fileManager.createDirectory(
                         at: configURL.deletingLastPathComponent(),
                         withIntermediateDirectories: true
                     )
@@ -59,8 +54,7 @@ class Config {
                 }
             }
             
-            let globalURL = URL(fileURLWithPath: "/usr/local/etc").appendingPathComponent(configFileName)
-            return globalURL
+            return URL(fileURLWithPath: "/usr/local/etc").appendingPathComponent(configFileName)
         }
                 
         func decode(_ url: URL) -> [String : Any] {
@@ -92,7 +86,7 @@ class Config {
                 return
             }
         } else {
-            onError(FlareDNSError("Failed to encode and store config data"))
+            onError(FlareDNSError.configSaveFailed)
             return
         }
     }
@@ -197,11 +191,4 @@ class Config {
         configDict[key] as? Bool ?? false
     }
     
-}
-
-
-extension Config {
-
-    static var shared = Config()
-
 }

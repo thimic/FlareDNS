@@ -10,48 +10,34 @@ import Foundation
 
 extension FlareDNSCommand.Configure.Check {
     
-    struct Config: ParsableCommand {
+    struct Config: AsyncParsableCommand {
         
         static let configuration = CommandConfiguration(abstract: "Check configuration. Connects to Cloudflare with configured credentials and checks that the records are available and editable.")
-                
-        func run() throws {
-            guard let controller = FlareDNSController() else {
-                print("Unable to start checks: No API token was set.".red())
+
+        func run() async throws {
+            let model = FlareDNSModel(config: FlareDNS.Config())
+            var controller: FlareDNSController
+            do {
+                controller = try FlareDNSController(model: model, ipV4Lookup: IPv4LookupAPI())
+            } catch {
+                print("Unable to start checks: \(error.localizedDescription).".red())
                 return
             }
             print("Starting checks".blue())
 
-            controller.check()
-                .done { message in
-                    print(message.green())
-                }
-                .catch { error in
-                    print("\(error)".red())
-                }
-                .finally {
-                    Foundation.exit(0)
-                }
-            RunLoop.main.run()
+            let message = try await controller.check()
+            print(message.green())
         }
         
     }
     
-    struct IP: ParsableCommand {
+    struct IP: AsyncParsableCommand {
         
         static let configuration = CommandConfiguration(abstract: "Display current IP address")
-                
-        func run() throws {
-            IPv4LookupAPI.shared.getIP()
-                .done { ip in
-                    print(ip.rawValue.cyan())
-                }
-                .catch { error in
-                    print("Unable to obtain IP address: \(error)")
-                }
-                .finally {
-                    Foundation.exit(0)
-                }
-            RunLoop.main.run()
+
+        func run() async throws {
+            let ip = try await IPv4LookupAPI().getIP()
+            print(ip.rawValue.cyan())
         }
         
     }

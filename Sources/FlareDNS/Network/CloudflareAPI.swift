@@ -1,8 +1,6 @@
 
 import Foundation
 import Logging
-import PromiseKit
-
 
 #if os(Linux)
 import FoundationNetworking
@@ -14,7 +12,7 @@ struct CloudFlareAPI {
     let requestManager: RequestManager
     
     init(apiToken: ApiToken) {
-        var manager = RequestManager()
+        let manager = RequestManager()
         manager.authorize(with: apiToken)
         requestManager = manager
     }
@@ -34,116 +32,69 @@ struct CloudFlareAPI {
         }
         
     }
-    
-    func listZones(zoneNames: [String]?) -> Promise<[Zone]> {
-        return Promise { seal in
-            var queryItems: [URLQueryItem]? = nil
-            if let zoneNames = zoneNames {
-                queryItems = [URLQueryItem(name: "name", value: zoneNames.joined(separator: ","))]
-            }
-            let endpoint = Endpoint("zones", queryItems: queryItems)
-            guard let url = endpoint.url else {
-                seal.reject(FlareDNSError("Unable to construct valid URL with \(endpoint.components)"))
-                return
-            }
-            requestManager.get(from: url)
-                .done { data in
-                    struct ResponseBody: Decodable {
-                        let result: [Zone]
-                    }
 
-                    let decoder = JSONDecoder()
-                    do {
-                        let responseBody = try decoder.decode(ResponseBody.self, from: data)
-                        seal.fulfill(responseBody.result)
-                    } catch {
-                        seal.reject(error)
-                    }
-                }
-                .catch { error in
-                    seal.reject(error)
-                }
+    func listZones(zoneNames: [String]?) async throws -> [Zone] {
+        var queryItems: [URLQueryItem]? = nil
+        if let zoneNames = zoneNames {
+            queryItems = [URLQueryItem(name: "name", value: zoneNames.joined(separator: ","))]
         }
-    }
-    
-    func listDNSRecords(zone: Zone) -> Promise<[DNSRecordResponse]> {
-        return Promise { seal in
-            guard let zoneID = zone.id else {
-                seal.reject(FlareDNSError("Missing zone ID for zone \"\(zone.name)\""))
-                return
-            }
-            
-            let endpoint = Endpoint("zones/\(zoneID)/dns_records")
-            guard let url = endpoint.url else {
-                seal.reject(FlareDNSError("Unable to construct valid URL with \(endpoint.components)"))
-                return
-            }
-            
-            requestManager.get(from: url)
-                .done { data in
-                    struct ResponseBody: Decodable {
-                        let result: [DNSRecordResponse]
-                    }
-                    
-                    let decoder = JSONDecoder()
-                    do {
-                        let responseBody = try decoder.decode(ResponseBody.self, from: data)
-                        seal.fulfill(responseBody.result)
-                    } catch {
-                        seal.reject(error)
-                    }
-                }
-                .catch { error in
-                    seal.reject(error)
-                }
+        let endpoint = Endpoint("zones", queryItems: queryItems)
+        guard let url = endpoint.url else {
+            throw FlareDNSError.invalidURL(fromComponents: endpoint.components)
         }
+        let data = try await requestManager.get(from: url)
+
+        struct ResponseBody: Decodable {
+            let result: [Zone]
+        }
+
+        let responseBody = try JSONDecoder().decode(ResponseBody.self, from: data)
+        return responseBody.result
     }
-    
+
+    func listDNSRecords(zone: Zone) async throws -> [DNSRecordResponse] {
+        guard let zoneID = zone.id else {
+            throw FlareDNSError.missingZoneID(zoneName: zone.name)
+        }
+
+        let endpoint = Endpoint("zones/\(zoneID)/dns_records")
+        guard let url = endpoint.url else {
+            throw FlareDNSError.invalidURL(fromComponents: endpoint.components)
+        }
+
+        let data = try await requestManager.get(from: url)
+
+        struct ResponseBody: Decodable {
+            let result: [DNSRecordResponse]
+        }
+
+        let responseBody = try JSONDecoder().decode(ResponseBody.self, from: data)
+        return responseBody.result
+
+    }
+
     /// Update given DNS record to the given IP address.
     /// - Parameters:
     ///   - record: Cloudflare record to update
     ///   - ip:     IP address to update record with
-    func updateDNSRecord(record: DNSRecord, ip: DNSContent) -> Promise<String> {
-        return Promise { seal in
-            
-            guard let zoneId = record.zone.id else {
-                seal.reject(FlareDNSError("No ID found for zone \"\(record.zone.name)\""))
-                return
-            }
-            
-            guard let recordId = record.id else {
-                seal.reject(FlareDNSError("No ID found for record \"\(record.name)\""))
-                return
-            }
-            
-            let endpoint = Endpoint("zones/\(zoneId)/dns_records/\(recordId)")
-            guard let url = endpoint.url else {
-                seal.reject(FlareDNSError("Unable to construct valid URL with \(endpoint.components)"))
-                return
-            }
-            
-            let encoder = JSONEncoder()
-            guard let requestBody = try? encoder.encode(record.createRequest(ip: ip)) else {
-                seal.reject(FlareDNSError("Unable to encode request body: \(record)"))
-                return
-            }
-            requestManager.put(from: url, httpBody: requestBody)
-                .done { data in
-                    seal.fulfill("Record \"\(record.name)\" was updated with IP \(ip.rawValue)")
-                }
-                .catch { error in
-                    seal.reject(error)
-                }
+    func updateDNSRecord(record: DNSRecord, ip: DNSContent) async throws -> String {
+
+        guard let zoneId = record.zone.id else {
+            throw FlareDNSError.missingZoneID(zoneName: record.zone.name)
         }
+
+        guard let recordId = record.id else {
+            throw FlareDNSError.missingRecordID(recordName: record.name)
+        }
+
+        let endpoint = Endpoint("zones/\(zoneId)/dns_records/\(recordId)")
+        guard let url = endpoint.url else {
+            throw FlareDNSError.invalidURL(fromComponents: endpoint.components)
+        }
+
+        let requestBody = try JSONEncoder().encode(record.createRequest(ip: ip))
+        try await requestManager.put(from: url, httpBody: requestBody)
+        return "Record \"\(record.name)\" was updated with IP \(ip.rawValue)"
     }
 
 }
-
-
-//if #available(OSX 10.12, *) {
-//    logger.info("Started FlareDNS")
-//    startTimer()
-//} else {
-//    logger.critical("Unsupported OS, terminating.")
-//    exit(EXIT_FAILURE)
-//}

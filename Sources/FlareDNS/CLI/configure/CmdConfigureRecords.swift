@@ -100,7 +100,7 @@ extension FlareDNSCommand.Configure.Records {
         return name
     }
     
-    struct Add: ParsableCommand {
+    struct Add: AsyncParsableCommand {
         
         static let configuration = CommandConfiguration(abstract: "Add DNS record to configuration")
         
@@ -111,19 +111,20 @@ extension FlareDNSCommand.Configure.Records {
         @Flag(help: "Proxy traffic through CloudFlare") var proxied: Bool = false
         
         func run() {
+            let model = FlareDNSModel(config: Config())
             guard ttl == 1 || (120...2147483647).contains(ttl) else {
                 print("TTL must be between 120 and 2,147,483,647 seconds, or 1 for Automatic.".yellow())
                 return
             }
             let name = resolveRecordName(zoneName: zoneName, recordName: recordName)
             let record = DNSRecord(zoneName: zoneName, recordName: name, type: recordType, ttl: ttl, proxied: proxied)
-            FlareDNSModel.shared.addRecord(record)
+            model.addRecord(record)
             printRecords([record])
         }
         
     }
     
-    struct List: ParsableCommand {
+    struct List: AsyncParsableCommand {
         
         static let configuration = CommandConfiguration(abstract: "List all DNS records from configuration")
         
@@ -131,15 +132,11 @@ extension FlareDNSCommand.Configure.Records {
         @Flag(help: "Format output as json") var json: Bool = false
 
         func run() {
-                        
+            let model = FlareDNSModel(config: Config())
             if json {
                 let encoder = JSONEncoder()
-                if #available(OSX 10.13, *) {
-                    encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-                } else {
-                    encoder.outputFormatting = [.prettyPrinted]
-                }
-                let record = FlareDNSModel.shared.getRecord(recordName: recordName)
+                encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+                let record = model.getRecord(recordName: recordName)
                 do {
                     let jsonData = try encoder.encode(record)
                     print(String(data:jsonData, encoding: .utf8)!)
@@ -149,7 +146,7 @@ extension FlareDNSCommand.Configure.Records {
                 return
             }
             
-            guard let record = FlareDNSModel.shared.getRecord(recordName: recordName) else {
+            guard let record = model.getRecord(recordName: recordName) else {
                 print("No records matching record name \"\(recordName)\"".yellow())
                 return
             }
@@ -158,14 +155,15 @@ extension FlareDNSCommand.Configure.Records {
         
     }
     
-    struct Remove: ParsableCommand {
+    struct Remove: AsyncParsableCommand {
         
         static let configuration = CommandConfiguration(abstract: "Remove named DNS record from configuration")
         
         @Argument(help: "DNS record name; use @ for root") var recordName: String
         
         func run() {
-            let result = FlareDNSModel.shared.removeRecord(recordName: recordName)
+            let model = FlareDNSModel(config: Config())
+            let result = model.removeRecord(recordName: recordName)
             switch result {
             case .success(let message):
                 print("\(message)".green())
@@ -176,45 +174,44 @@ extension FlareDNSCommand.Configure.Records {
         
     }
     
-    struct RemoveAll: ParsableCommand {
+    struct RemoveAll: AsyncParsableCommand {
         
         static let configuration = CommandConfiguration(abstract: "Remove all DNS records from configuration")
                 
         func run() {
-            FlareDNSModel.shared.removeAllRecords()
+            let model = FlareDNSModel(config: Config())
+            model.removeAllRecords()
             print("Removed all records".green())
         }
         
     }
 
     
-    struct ListAll: ParsableCommand {
+    struct ListAll: AsyncParsableCommand {
         
         static let configuration = CommandConfiguration(abstract: "List all DNS records from configuration")
         
         @Flag(help: "Format output as json") var json: Bool = false
 
-        func run() {
+        func run() async throws {
+            let model = FlareDNSModel(config: Config())
             if json {
                 let encoder = JSONEncoder()
-                if #available(OSX 10.13, *) {
-                    encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-                } else {
-                    encoder.outputFormatting = [.prettyPrinted]
-                }
+                encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+
                 do {
-                    let jsonData = try encoder.encode(FlareDNSModel.shared.records)
+                    let jsonData = try encoder.encode(model.records)
                     print(String(data:jsonData, encoding: .utf8)!)
                 } catch {
                     print("[]")
                 }
                 return
             }
-            if FlareDNSModel.shared.records.count <= 0 {
+            if model.records.count <= 0 {
                 print("No records".yellow())
                 return
             }
-            printRecords(FlareDNSModel.shared.records)
+            printRecords(model.records)
         }
         
     }

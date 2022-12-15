@@ -7,149 +7,83 @@
 
 import Foundation
 import Logging
-import PromiseKit
+import CollectionConcurrencyKit
 
 
 struct FlareDNSController {
         
     var model: FlareDNSModel
     let cloudflareAPI: CloudFlareAPI
+    let ipV4Lookup: IPv4LookupAPI
     
-    init?() {
-        model = FlareDNSModel.shared
+    init(model: FlareDNSModel, ipV4Lookup: IPv4LookupAPI) throws {
+        self.model = model
+        self.ipV4Lookup = ipV4Lookup
         guard let apiToken = model.apiToken else {
-            return nil
+            throw FlareDNSError.missingAPIToken
         }
         cloudflareAPI = CloudFlareAPI(apiToken: apiToken)
     }
-    
-    @available(OSX 10.12, *)
-    func run() -> Promise<[String]> {
-        return Promise { seal in
-            firstly {
-                when(fulfilled: model.getRecordsWithIds(cloudflareAPI), getIP())
-            }
-            .then { records, ip in
-                when(fulfilled: records.map({ record in cloudflareAPI.updateDNSRecord(record: record, ip: ip) }))
-            }
-            .done { reports in
-                seal.fulfill(reports)
-            }
-            .catch { error in
-                seal.reject(error)
-            }
-        }
-    }
-    
-    private func getIP() -> Promise<DNSContent> {
-        return Promise { seal in
-            IPv4LookupAPI.shared.getIP()
-                .done { ip in
-                    // TODO: Check for force flag
-                    if let oldIp = model.ip {
-                        if ip == oldIp {
-                            // TODO: Pass through a special error and handle its case for a nicer log output
-                            return seal.reject(FlareDNSError("IP is unchanged, skipping update"))
-                        }
-                    }
-                    model.ip = ip
-                    seal.fulfill(ip)
-                }
-                .catch { error in
-                    seal.reject(error)
-                }
-        }
-    }
-    
-    private func checkZones() -> Promise<[Zone]> {
-        return Promise { seal in
-            cloudflareAPI.listZones(zoneNames: model.configZoneNames.sorted())
-                .done { zones in
-                    let resultZoneNames = zones.map { zone in
-                        return zone.name
-                    }
-                    guard model.configZoneNames.sorted() == resultZoneNames.sorted() else {
-                        seal.reject(FlareDNSError(
-                            "Expected data for zone(s) [\(model.configZoneNames.sorted().joined(separator: ", "))], " +
-                            "but only received data for zone(s) [\(resultZoneNames.sorted().joined(separator: ", "))]"
-                        ))
-                        return
-                    }
-                    seal.fulfill(zones)
-                }
-                .catch { error in
-                    seal.reject(error)
-                }
-        }
-    }
-    
-    private func getRecords(_ zones: [Zone]) -> Promise<[DNSRecordResponse]> {
-        return Promise { seal in
-            when(fulfilled: zones.map(cloudflareAPI.listDNSRecords))
-                .done { records in
-                    seal.fulfill(records.flatMap { $0 })
-                }
-                .catch { error in
-                    seal.reject(error)
-                }
-        }
-    }
-    
-    private func checkRecords(_ records: [DNSRecordResponse]) -> Promise<[DNSRecordResponse]> {
-        return Promise { seal in
-            
-            var invalidRecords: [String] = []
-            var lockedRecords: [String] = []
-            
-            for configRecord in model.records {
-                guard let apiRecord = records.filter({ apiRecord in apiRecord.name == configRecord.name }).first else {
-                    invalidRecords.append(configRecord.name)
-                    continue
-                }
-                guard !apiRecord.locked else {
-                    lockedRecords.append(configRecord.name)
-                    continue
-                }
-            }
 
-            guard invalidRecords.isEmpty else {
-                seal.reject(FlareDNSError("The following records are not available via the Cloudflare API: \n - \(invalidRecords.joined(separator: "\n - "))"))
-                return
-            }
-            
-            guard lockedRecords.isEmpty else {
-                seal.reject(FlareDNSError("The following records are locked in the Cloudflare API and cannot be edited: \n - \(lockedRecords.joined(separator: "\n - "))"))
-                return
-            }
-            seal.fulfill(records)
+    func run() async throws -> [String] {
+        async let records = try await model.getRecordsWithIds(cloudflareAPI)
+        async let ip = try await getIP()
+        return try await records.concurrentMap { [ip] record in
+            try await cloudflareAPI.updateDNSRecord(record: record, ip: ip)
         }
     }
-    
-    func check() -> Promise<String> {
-        return Promise { seal in
-            
-            guard !model.configZoneNames.isEmpty else {
-                seal.reject(FlareDNSError("No records have been added to the configuration"))
-                return
-            }
-            
-            firstly {
-                checkZones()
-            }
-            .then { zones in
-                getRecords(zones)
-            }
-            .then { records in
-                checkRecords(records)
-            }
-            .done { records in
-                seal.fulfill("Done!")
-            }
-            .catch { error in
-                seal.reject(error)
-            }
-            
+
+    private func getIP() async throws -> DNSContent {
+        try await ipV4Lookup.getIP()
+    }
+
+    private func checkZones() async throws -> [Zone] {
+        let zones = try await cloudflareAPI.listZones(zoneNames: model.configZoneNames.sorted())
+        let resultZoneNames = zones.map(\.name)
+        guard model.configZoneNames.sorted() == resultZoneNames.sorted() else {
+            throw FlareDNSError.zoneMismatch(expected: model.configZoneNames, actual: resultZoneNames)
         }
+        return zones
+    }
+
+    private func getRecords(_ zones: [Zone]) async throws -> [DNSRecordResponse] {
+        try await zones.concurrentFlatMap(cloudflareAPI.listDNSRecords)
+    }
+
+    @discardableResult
+    private func checkRecords(_ records: [DNSRecordResponse]) throws -> [DNSRecordResponse] {
+        var invalidRecords: [String] = []
+        var lockedRecords: [String] = []
+
+        for configRecord in model.records {
+            guard let apiRecord = records.filter({ apiRecord in apiRecord.name == configRecord.name }).first else {
+                invalidRecords.append(configRecord.name)
+                continue
+            }
+            guard !apiRecord.locked else {
+                lockedRecords.append(configRecord.name)
+                continue
+            }
+        }
+
+        guard invalidRecords.isEmpty else {
+            throw FlareDNSError.missingRecords(records: invalidRecords)
+        }
+
+        guard lockedRecords.isEmpty else {
+            throw FlareDNSError.lockedRecords(records: lockedRecords)
+        }
+        return records
+    }
+
+    func check() async throws -> String {
+        guard !model.configZoneNames.isEmpty else {
+            throw FlareDNSError.noRecords
+        }
+        let zones = try await checkZones()
+        let records = try await getRecords(zones)
+        try checkRecords(records)
+        return "Done!"
     }
     
 }

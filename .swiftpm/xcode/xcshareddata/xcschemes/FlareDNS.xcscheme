@@ -125,6 +125,14 @@
             argument = "check"
             isEnabled = "YES">
          </CommandLineArgument>
+         <CommandLineArgument
+            argument = "config"
+            isEnabled = "NO">
+         </CommandLineArgument>
+         <CommandLineArgument
+            argument = "ip"
+            isEnabled = "YES">
+         </CommandLineArgument>
       </CommandLineArguments>
       <EnvironmentVariables>
          <EnvironmentVariable
