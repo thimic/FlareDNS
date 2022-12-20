@@ -9,7 +9,6 @@ x-shared_environment: &shared_environment
 
 services:
   flaredns:
-#    image: flaredns
     restart: unless-stopped
     build:
       context: .

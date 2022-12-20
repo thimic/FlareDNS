@@ -1,20 +1,15 @@
 
 import Foundation
 import Logging
-
-#if os(Linux)
-import FoundationNetworking
-#endif
+import NIOFoundationCompat
 
 
-struct CloudFlareAPI {
-    
+actor CloudFlareAPI {
+
     let requestManager: RequestManager
     
     init(apiToken: ApiToken) {
-        let manager = RequestManager()
-        manager.authorize(with: apiToken)
-        requestManager = manager
+        requestManager = RequestManager(authorization: "Bearer \(apiToken.rawValue)")
     }
     
     private struct Endpoint {
@@ -93,7 +88,7 @@ struct CloudFlareAPI {
         }
 
         let requestBody = try JSONEncoder().encode(record.createRequest(ip: ip))
-        try await requestManager.put(from: url, httpBody: requestBody)
+        try await requestManager.put(from: url, body: requestBody)
         return "Record \"\(record.name)\" was updated with IP \(ip.rawValue)"
     }
 

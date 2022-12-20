@@ -6,15 +6,29 @@
 //
 
 import ArgumentParser
+import Backtrace
 import ColorizeSwift
 import Foundation
 import Logging
+import AsyncHTTPClient
 
 
 @main
 struct FlareDNSCommand: AsyncParsableCommand {
-    
-    static let configuration = CommandConfiguration(abstract: "FlareDNS CLI", subcommands: [Run.self, Configure.self])
+
+    init() {
+        Backtrace.install()
+    }
+
+    private static let subcommands = {
+        var commands: [ParsableCommand.Type] = [Run.self, Configure.self]
+        #if DEBUG
+        commands.append(Debug.self)
+        #endif
+        return commands
+    }()
+
+    static let configuration = CommandConfiguration(abstract: "FlareDNS CLI", subcommands: Self.subcommands)
 
     struct Run: AsyncParsableCommand {
         
@@ -69,3 +83,28 @@ struct FlareDNSCommand: AsyncParsableCommand {
     }
     
 }
+
+#if DEBUG
+
+extension FlareDNSCommand {
+
+    struct Debug: AsyncParsableCommand {
+
+        static let configuration = CommandConfiguration(
+            abstract: "FlareDNS Debug Options"
+        )
+
+        func run() async throws {
+            let manager = RequestManager()
+
+            try await manager.get(from: URL(string: "https://thimic.no")!)
+            try await manager.get(from: URL(string: "https://janeli.nz")!)
+
+        }
+
+    }
+
+
+}
+
+#endif

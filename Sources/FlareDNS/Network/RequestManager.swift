@@ -1,74 +1,78 @@
 //
-//  File.swift
+//  RequestManager.swift
 //  
 //
 //  Created by Michael Thingnes on 4/01/21.
 //
 
+import AsyncHTTPClient
 import Foundation
-import RegexBuilder
+import Logging
+import NIOCore
+import NIOHTTP1
+import NIOSSL
+import NIOPosix
 
-#if os(Linux)
-import FoundationNetworking
-#endif
 
-final class RequestManager: NSObject {
+actor RequestManager {
 
     typealias Headers = [String: String]
-
-    enum Method: String {
-        case get = "GET"
-        case post = "POST"
-        case put = "PUT"
-    }
 
     var cookie: String?
     var authorization: String?
 
-    var headers: Headers = ["Content-Type": "application/json"]
+    var headers: HTTPHeaders = ["Content-Type": "application/json"]
 
-    private lazy var urlSession = URLSession.shared
-    private lazy var insecureUrlSession = URLSession(configuration: .default, delegate: self, delegateQueue: nil)
+    init(authorization: String? = nil) {
+        self.authorization = authorization
+    }
 
     @discardableResult
-    func request(from url: URL, method: Method = .get, headers: Headers? = nil, httpBody: Data? = nil, sessionType: SessionType = .standard) async throws -> Data {
-        var request = URLRequest(url: url)
-        request.httpMethod = method.rawValue
-        request.allHTTPHeaderFields = completeHeaders(headers)
-        request.httpBody = httpBody
-        let (data, response) = try await session(sessionType).data(for: request)
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw FlareDNSError.invalidResponse
+    func request(
+        from url: URL,
+        method: HTTPMethod = .GET,
+        headers: HTTPHeaders? = nil,
+        body: Data? = nil,
+        certificateVerification: CertificateVerification = .fullVerification
+    ) async throws -> ByteBuffer {
+        let client = HTTPClient(
+            eventLoopGroupProvider: .createNew,
+            configuration: .init(certificateVerification: certificateVerification)
+        )
+        defer {
+            do {
+                try client.syncShutdown()
+            } catch {
+                Logger.shared.error("Failed to shut down HTTPClient: \(error.localizedDescription)")
+            }
         }
-        guard 200..<300 ~= httpResponse.statusCode else {
-            throw FlareDNSError.errorResponse(response: httpResponse)
+
+        var request = HTTPClientRequest(url: url.absoluteString)
+        request.method = method
+        request.headers = completeHeaders(headers)
+        request.body = body.map { .bytes(.init(data: $0)) }
+
+        let response = try await client.execute(request, timeout: .seconds(30))
+        guard response.status == .ok else {
+            throw FlareDNSError.errorResponse(responseStatus: response.status)
         }
-        if let cookie = httpResponse.value(forHTTPHeaderField: "Set-Cookie") {
+        if let cookie = response.headers.first(name: "Set-Cookie") {
             self.cookie = cookie
         }
-        return data
+        return try await response.body.collect(upTo: 1024 * 1024)
     }
 
-    func get(from url: URL, sessionType: SessionType = .standard) async throws -> Data {
-        try await request(from: url, method: .get, sessionType: sessionType)
+    func get(from url: URL, certificateVerification: CertificateVerification = .fullVerification) async throws -> ByteBuffer {
+        try await request(from: url, method: .GET, certificateVerification: certificateVerification)
     }
 
-    func post(from url: URL, sessionType: SessionType = .standard) async throws -> Data {
-        try await request(from: url, method: .post, sessionType: sessionType)
+    func post(from url: URL, certificateVerification: CertificateVerification = .fullVerification) async throws -> ByteBuffer {
+        try await request(from: url, method: .POST, certificateVerification: certificateVerification)
     }
 
     @discardableResult
-    func put(from url: URL, httpBody: Data, sessionType: SessionType = .standard) async throws -> Data {
-        try await request(from: url, method: .put, httpBody: httpBody, sessionType: sessionType)
-    }
-
-    private func session(_ sessionType: SessionType) -> URLSession {
-        switch sessionType {
-        case .standard:
-            return urlSession
-        case .insecure:
-            return insecureUrlSession
-        }
+    func put(from url: URL, body: Data, certificateVerification: CertificateVerification = .fullVerification) async throws -> ByteBuffer {
+        try await request(from: url, method: .PUT, body: body, certificateVerification: certificateVerification)
     }
     
 }
@@ -76,20 +80,16 @@ final class RequestManager: NSObject {
 
 extension RequestManager {
 
-    func authorize(with token: ApiToken) {
-        authorization = "Bearer \(token.rawValue)"
-    }
-
-    private func completeHeaders(_ headers: Headers? = nil) -> Headers {
+    private func completeHeaders(_ headers: HTTPHeaders? = nil) -> HTTPHeaders {
         var allHeaders = self.headers
         if let headers {
-            allHeaders.merge(headers) { lhs, rhs in rhs }
+            allHeaders.replaceOrAdd(contentsOf: headers)
         }
         if let cookie {
-            allHeaders["Cookie"] = cookie
+            allHeaders.replaceOrAdd(name: "Cookie", value: cookie)
         }
         if let authorization {
-            allHeaders["Authorization"] = authorization
+            allHeaders.replaceOrAdd(name: "Authorization", value: authorization)
         }
         return allHeaders
     }
@@ -97,15 +97,12 @@ extension RequestManager {
 }
 
 
-extension RequestManager: URLSessionDelegate {
+extension HTTPHeaders {
 
-    func urlSession(_ session: URLSession, didReceive challenge: URLAuthenticationChallenge) async -> (URLSession.AuthChallengeDisposition, URLCredential?) {
-        #if os(Linux)
-        // Self signed certs are not supported on Linux: https://forums.swift.org/t/handling-self-signed-certificates-in-urlauthenticationchallenge-on-linux/22575
-        return (.performDefaultHandling, nil)
-        #else
-        return (.useCredential, challenge.protectionSpace.serverTrust.map { URLCredential(trust: $0) })
-        #endif
+    mutating func replaceOrAdd(contentsOf other: HTTPHeaders) {
+        for (name, value) in other {
+            self.replaceOrAdd(name: name, value: value)
+        }
     }
 
 }

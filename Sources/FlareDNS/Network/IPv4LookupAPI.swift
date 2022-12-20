@@ -19,7 +19,7 @@ struct IPv4LookupAPI {
                 let dnsContent = try await lookup.getIP(requestManager: requestManager)
                 return dnsContent
             } catch {
-                Logger.shared.warning("Unable to look up IP using \(lookup.endpoint)")
+                Logger.shared.warning("Unable to look up IP using \(lookup.endpoint): \(error)")
             }
         }
         throw FlareDNSError.allLookupsFailed

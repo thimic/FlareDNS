@@ -6,16 +6,14 @@
 //
 
 import Foundation
-#if os(Linux)
-import FoundationNetworking
-#endif
+import NIOHTTP1
 
 
 enum FlareDNSError: LocalizedError {
 
     case allLookupsFailed
     case configSaveFailed
-    case errorResponse(response: HTTPURLResponse)
+    case errorResponse(responseStatus: HTTPResponseStatus)
     case invalidResponse
     case invalidURL(fromComponents: URLComponents)
     case lockedRecords(records: [String])
@@ -34,8 +32,8 @@ enum FlareDNSError: LocalizedError {
             return "All lookups failed"
         case .configSaveFailed:
             return "Failed to encode and store config data"
-        case .errorResponse(response: let response):
-            return "\(response.statusCode) - \(response.description)"
+        case .errorResponse(responseStatus: let responseStatus):
+            return responseStatus.description
         case .invalidResponse:
             return "Invalid HTTP response from API"
         case .invalidURL(fromComponents: let components):

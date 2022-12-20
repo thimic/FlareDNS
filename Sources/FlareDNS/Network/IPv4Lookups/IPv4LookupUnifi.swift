@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import NIOSSL
 
 
 struct IPv4LookupUnifi: IPv4Lookupable {
@@ -19,10 +20,10 @@ struct IPv4LookupUnifi: IPv4Lookupable {
     ) ?? false
 
     let name = "Unifi Controller"
-    let sessionType: SessionType = Self.allowSelfSigned ? .insecure : .standard
+    let certificateVerification: CertificateVerification = Self.allowSelfSigned ? .none : .fullVerification
     let endpoint = URL(string: "https://\(Self.host):\(Self.port)/api/s/default/stat/health")!
     let login: Login? = Login(
-        method: .post,
+        method: .POST,
         url: URL(string: "https://\(Self.host):\(Self.port)/api/login")!,
         headers: ["Content-Type": "application/json"],
         body: ["username": Self.username, "password": Self.password]

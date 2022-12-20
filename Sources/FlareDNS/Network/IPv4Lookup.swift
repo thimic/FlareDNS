@@ -28,19 +28,19 @@ extension IPv4Lookup {
     func getIP(requestManager: RequestManager) async throws -> DNSContent {
         if let login = lookupInfo.login {
             let body = try? JSONEncoder().encode(login.body)
-            _ = try await requestManager.request(
+            try await requestManager.request(
                 from: login.url,
                 method: login.method,
                 headers: login.headers,
-                httpBody: body,
-                sessionType: lookupInfo.sessionType
+                body: body,
+                certificateVerification: lookupInfo.certificateVerification
             )
         }
-        let data = try await requestManager.get(from: lookupInfo.endpoint, sessionType: lookupInfo.sessionType)
+        let data = try await requestManager.get(from: lookupInfo.endpoint, certificateVerification: lookupInfo.certificateVerification)
         guard let ip = lookupInfo.dataHandler(data) else {
             throw FlareDNSError.lookupFailed(endpoint: lookupInfo.endpoint)
         }
-        Logger.shared.warning("Found IP using \(lookupInfo.endpoint)")
+        Logger.shared.warning("Found IP using \(lookupInfo.endpoint): \(ip.rawValue)")
         return ip
     }
 

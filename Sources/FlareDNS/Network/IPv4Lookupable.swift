@@ -6,13 +6,16 @@
 //
 
 import Foundation
+import NIOCore
+import NIOHTTP1
+import NIOSSL
 
 protocol IPv4Lookupable {
 
-    typealias DNSHandler = (Data) -> DNSContent?
+    typealias DNSHandler = (ByteBuffer) -> DNSContent?
 
     var name: String { get }
-    var sessionType: SessionType { get }
+    var certificateVerification: CertificateVerification { get }
     var login: Login? { get }
     var endpoint: URL { get }
     var dataHandler: DNSHandler { get }
@@ -21,24 +24,24 @@ protocol IPv4Lookupable {
 
 
 extension IPv4Lookupable {
-    var sessionType: SessionType { .standard }
+    var certificateVerification: CertificateVerification { .fullVerification }
     var login: Login? { nil }
     var dataHandler: DNSHandler {
         { data in
-            String(data: data, encoding: .utf8)
-                .map { DNSContent(rawValue: $0.trimmingCharacters(in: .whitespacesAndNewlines)) }
+            let dns = String(buffer: data)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            return DNSContent(rawValue: dns)
         }
     }
 }
 
 struct Login {
 
-    typealias Headers = [String: String]
     typealias Body = [String: String]
 
-    let method: RequestManager.Method
+    let method: HTTPMethod
     let url: URL
-    let headers: Headers?
+    let headers: HTTPHeaders?
     let body: Body
 
 }

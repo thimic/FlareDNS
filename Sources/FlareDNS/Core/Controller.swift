@@ -26,8 +26,8 @@ struct FlareDNSController {
     }
 
     func run() async throws -> [String] {
-        async let records = try await model.getRecordsWithIds(cloudflareAPI)
-        async let ip = try await getIP()
+        async let records = try model.getRecordsWithIds(cloudflareAPI)
+        async let ip = try getIP()
         return try await records.concurrentMap { [ip] record in
             try await cloudflareAPI.updateDNSRecord(record: record, ip: ip)
         }
