@@ -40,7 +40,7 @@ extension IPv4Lookup {
         guard let ip = lookupInfo.dataHandler(data) else {
             throw FlareDNSError.lookupFailed(endpoint: lookupInfo.endpoint)
         }
-        Logger.shared.warning("Found IP using \(lookupInfo.endpoint): \(ip.rawValue)")
+        Logger.shared.debug("Found IP using \(lookupInfo.endpoint): \(ip.rawValue)")
         return ip
     }
 

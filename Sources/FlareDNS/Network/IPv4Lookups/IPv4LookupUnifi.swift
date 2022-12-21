@@ -11,23 +11,20 @@ import NIOSSL
 
 struct IPv4LookupUnifi: IPv4Lookupable {
 
-    private static let host = ProcessInfo.processInfo.environment["FLAREDNS_UNIFI_HOST"] ?? "unifi"
-    private static let port = ProcessInfo.processInfo.environment["FLAREDNS_UNIFI_PORT"] ?? "8443"
-    private static let username = ProcessInfo.processInfo.environment["FLAREDNS_UNIFI_USERNAME"] ?? ""
-    private static let password = ProcessInfo.processInfo.environment["FLAREDNS_UNIFI_PASSWORD"] ?? ""
-    private static let allowSelfSigned = Bool(
-        argument: ProcessInfo.processInfo.environment["FLAREDNS_UNIFI_ALLOW_SELF_SIGNED_CERT"] ?? "false"
-    ) ?? false
-
     let name = "Unifi Controller"
-    let certificateVerification: CertificateVerification = Self.allowSelfSigned ? .none : .fullVerification
-    let endpoint = URL(string: "https://\(Self.host):\(Self.port)/api/s/default/stat/health")!
-    let login: Login? = Login(
-        method: .POST,
-        url: URL(string: "https://\(Self.host):\(Self.port)/api/login")!,
-        headers: ["Content-Type": "application/json"],
-        body: ["username": Self.username, "password": Self.password]
-    )
+    var certificateVerification: CertificateVerification {
+        allowSelfSigned ? .none : .fullVerification
+    }
+    // TODO: Force unwrapping here is really not safe
+    var endpoint: URL { URL(string: "https://\(host):\(port)/api/s/default/stat/health")! }
+    var login: Login? {
+        Login(
+            method: .POST,
+            url: URL(string: "https://\(host):\(port)/api/login")!,
+            headers: ["Content-Type": "application/json"],
+            body: ["username": username, "password": password]
+        )
+    }
 
     var dataHandler: DNSHandler = { data in
         let decoder = JSONDecoder()
@@ -36,6 +33,25 @@ struct IPv4LookupUnifi: IPv4Lookupable {
             .data
             .compactMap(\.wanIp)
             .first
+    }
+
+}
+
+private extension IPv4LookupUnifi {
+
+    var host: String { environment("FLAREDNS_UNIFI_HOST", default: "unifi") }
+    var port: String { environment("FLAREDNS_UNIFI_PORT", default: "8443") }
+    var username: String { environment("FLAREDNS_UNIFI_USERNAME") }
+    var password: String { environment("FLAREDNS_UNIFI_PASSWORD") }
+    var allowSelfSigned: Bool { environment("FLAREDNS_UNIFI_ALLOW_SELF_SIGNED_CERT", default: false) }
+
+    private func environment(_ key: String, default: String = "") -> String {
+        ProcessInfo.processInfo.environment[key] ?? `default`
+    }
+
+    private func environment(_ key: String, default: Bool = false) -> Bool {
+        let string = environment(key, default: "false")
+        return Bool(argument: string) ?? `default`
     }
 
 }
