@@ -10,11 +10,18 @@ import Logging
 import CollectionConcurrencyKit
 
 
-struct FlareDNSController {
+actor FlareDNSController {
+
+    enum RunResult {
+        case noChange(ip: DNSContent)
+        case updated(records: [String])
+    }
         
     var model: FlareDNSModel
     let cloudflareAPI: CloudFlareAPI
     let ipV4Lookup: IPv4LookupAPI
+
+    private var lastIP: DNSContent? = nil
     
     init(model: FlareDNSModel, ipV4Lookup: IPv4LookupAPI) throws {
         self.model = model
@@ -25,12 +32,19 @@ struct FlareDNSController {
         cloudflareAPI = CloudFlareAPI(apiToken: apiToken)
     }
 
-    func run() async throws -> [String] {
+    func run() async throws -> RunResult {
+        let ip = try await getIP()
+        if let lastIP {
+            if ip == lastIP {
+                return .noChange(ip: ip)
+            }
+        }
+        lastIP = ip
         async let records = try model.getRecordsWithIds(cloudflareAPI)
-        async let ip = try getIP()
-        return try await records.concurrentMap { [ip] record in
+        let updatedRecords = try await records.concurrentMap { [cloudflareAPI] record in
             try await cloudflareAPI.updateDNSRecord(record: record, ip: ip)
         }
+        return .updated(records: updatedRecords)
     }
 
     private func getIP() async throws -> DNSContent {
@@ -86,4 +100,19 @@ struct FlareDNSController {
         return "Done!"
     }
     
+}
+
+extension FlareDNSController.RunResult {
+
+    func log() {
+        switch self {
+        case .noChange(let ip):
+            Logger.shared.info("\("IP has not changed: \(ip.rawValue)".blue())")
+        case .updated(let records):
+            for record in records {
+                Logger.shared.info("\(record.cyan())")
+            }
+        }
+    }
+
 }

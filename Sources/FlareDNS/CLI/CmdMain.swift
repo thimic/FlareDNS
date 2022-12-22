@@ -47,7 +47,7 @@ struct FlareDNSCommand: AsyncParsableCommand {
                 print("Unable to start FlareDNS: \(error.localizedDescription)".yellow())
                 return
             }
-            guard !controller.model.records.isEmpty else {
+            guard await !controller.model.records.isEmpty else {
                 print("FlareDNS has not been configured with any DNS records. Aborting.".yellow())
                 return
             }
@@ -62,9 +62,7 @@ struct FlareDNSCommand: AsyncParsableCommand {
 
         private func start(_ controller: FlareDNSController) async throws {
             do {
-                for message in try await controller.run() {
-                    Logger.shared.info("\(message.cyan())")
-                }
+                try await controller.run().log()
             } catch {
                 Logger.shared.error("\("\(error)".red())")
             }
@@ -95,10 +93,7 @@ extension FlareDNSCommand {
         )
 
         func run() async throws {
-            let manager = RequestManager()
-
-            try await manager.get(from: URL(string: "https://thimic.no")!)
-            try await manager.get(from: URL(string: "https://janeli.nz")!)
+            Logger.shared.info("Debug interface to come")
 
         }
 
