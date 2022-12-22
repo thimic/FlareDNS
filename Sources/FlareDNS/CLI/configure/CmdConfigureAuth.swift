@@ -12,25 +12,27 @@ import Foundation
 
 extension FlareDNSCommand.Configure.Auth {
         
-    struct Set: ParsableCommand {
+    struct Set: AsyncParsableCommand {
         
         static let configuration = CommandConfiguration(abstract: "Set Cloudflare API token")
         
         @Argument(help: "Cloudflare API token") var token: String
         
         func run() throws {
-            FlareDNSModel.shared.apiToken = ApiToken(rawValue: token)
+            let model = FlareDNSModel(config: Config())
+            model.apiToken = ApiToken(rawValue: token)
             print("API token was set".green())
         }
         
     }
     
-    struct Get: ParsableCommand {
+    struct Get: AsyncParsableCommand {
         
         static let configuration = CommandConfiguration(abstract: "Get Cloudflare API token")
                 
         func run() throws {
-            guard let token = FlareDNSModel.shared.apiToken else {
+            let model = FlareDNSModel(config: Config())
+            guard let token = model.apiToken else {
                 print("No API token found".red())
                 return
             }
@@ -39,16 +41,17 @@ extension FlareDNSCommand.Configure.Auth {
         
     }
     
-    struct Remove: ParsableCommand {
+    struct Remove: AsyncParsableCommand {
         
         static let configuration = CommandConfiguration(abstract: "Remove Cloudflare API token")
                 
         func run() throws {
-            if FlareDNSModel.shared.apiToken == nil {
+            let model = FlareDNSModel(config: Config())
+            if model.apiToken == nil {
                 print("No API token was set".yellow())
                 return
             }
-            FlareDNSModel.shared.apiToken = nil
+            model.apiToken = nil
             print("API token was removed".green())
         }
     }

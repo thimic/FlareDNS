@@ -1,0 +1,19 @@
+version: '3.7'
+
+x-shared_environment: &shared_environment
+  FLAREDNS_UNIFI_HOST: ${FLAREDNS_UNIFI_HOST:-unifi}
+  FLAREDNS_UNIFI_PORT: ${FLAREDNS_UNIFI_PORT:-8443}
+  FLAREDNS_UNIFI_USERNAME: ${FLAREDNS_UNIFI_USERNAME}
+  FLAREDNS_UNIFI_PASSWORD: ${FLAREDNS_UNIFI_PASSWORD}
+  FLAREDNS_UNIFI_ALLOW_SELF_SIGNED_CERT: ${FLAREDNS_UNIFI_ALLOW_SELF_SIGNED_CERT-true}
+
+services:
+  flaredns:
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      <<: *shared_environment
+    volumes:
+      - '${FLAREDNS_CONFIG}:/config'

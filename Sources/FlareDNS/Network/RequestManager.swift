@@ -1,64 +1,108 @@
 //
-//  File.swift
+//  RequestManager.swift
 //  
 //
 //  Created by Michael Thingnes on 4/01/21.
 //
 
+import AsyncHTTPClient
 import Foundation
-import PromiseKit
+import Logging
+import NIOCore
+import NIOHTTP1
+import NIOSSL
+import NIOPosix
 
 
-#if os(Linux)
-import FoundationNetworking
-#endif
+actor RequestManager {
 
-struct RequestManager {
-    
-    var urlSession = URLSession.shared
-    var headers: [String: String] = ["Content-Type": "application/json"]
-    
-    private func request(from url: URL, method: String = "GET", httpBody: Data? = nil) -> Promise<Data> {
-        return Promise { seal in
-            var request = URLRequest(url: url)
-            request.httpMethod = method
-            request.allHTTPHeaderFields = headers
-            request.httpBody = httpBody
-            urlSession.dataTask(with: request) { data, response, error in
-                guard let httpResponse = response as? HTTPURLResponse else {
-                    seal.reject(error ?? FlareDNSError("No response from API"))
-                    return
-                }
-                guard 200..<300 ~= httpResponse.statusCode else {
-                    seal.reject(error ?? FlareDNSError(httpResponse.description))
-                    return
-                }
-                guard let data = data else {
-                    seal.reject(error ?? FlareDNSError("Unknown Error"))
-                    return
-                }
-                seal.fulfill(data)
-            }.resume()
+    typealias Headers = [String: String]
+
+    var cookie: String?
+    var authorization: String?
+
+    var headers: HTTPHeaders = ["Content-Type": "application/json"]
+
+    init(authorization: String? = nil) {
+        self.authorization = authorization
+    }
+
+    @discardableResult
+    func request(
+        from url: URL,
+        method: HTTPMethod = .GET,
+        headers: HTTPHeaders? = nil,
+        body: Data? = nil,
+        certificateVerification: CertificateVerification = .fullVerification
+    ) async throws -> ByteBuffer {
+        let client = HTTPClient(
+            eventLoopGroupProvider: .createNew,
+            configuration: .init(certificateVerification: certificateVerification)
+        )
+        defer {
+            do {
+                try client.syncShutdown()
+            } catch {
+                Logger.shared.error("Failed to shut down HTTPClient: \(error.localizedDescription)")
+            }
         }
-    }
-    
-    func get(from url: URL) -> Promise<Data> {
-        request(from: url, method: "GET")
-    }
-    
-    func post(from url: URL) -> Promise<Data> {
-        request(from: url, method: "POST")
+
+        var request = HTTPClientRequest(url: url.absoluteString)
+        request.method = method
+        request.headers = completeHeaders(headers)
+        request.body = body.map { .bytes(.init(data: $0)) }
+
+        let response = try await client.execute(request, timeout: .seconds(30))
+        guard response.status == .ok else {
+            throw FlareDNSError.errorResponse(responseStatus: response.status)
+        }
+        if let cookie = response.headers.first(name: "Set-Cookie") {
+            self.cookie = cookie
+        }
+        return try await response.body.collect(upTo: 1024 * 1024)
     }
 
-    func put(from url: URL, httpBody: Data) -> Promise<Data> {
-        request(from: url, method: "PUT", httpBody: httpBody)
+    func get(from url: URL, certificateVerification: CertificateVerification = .fullVerification) async throws -> ByteBuffer {
+        try await request(from: url, method: .GET, certificateVerification: certificateVerification)
+    }
+
+    func post(from url: URL, certificateVerification: CertificateVerification = .fullVerification) async throws -> ByteBuffer {
+        try await request(from: url, method: .POST, certificateVerification: certificateVerification)
+    }
+
+    @discardableResult
+    func put(from url: URL, body: Data, certificateVerification: CertificateVerification = .fullVerification) async throws -> ByteBuffer {
+        try await request(from: url, method: .PUT, body: body, certificateVerification: certificateVerification)
     }
     
 }
 
 
 extension RequestManager {
-    mutating func authorize(with token: ApiToken) {
-        headers["Authorization"] = "Bearer \(token.rawValue)"
+
+    private func completeHeaders(_ headers: HTTPHeaders? = nil) -> HTTPHeaders {
+        var allHeaders = self.headers
+        if let headers {
+            allHeaders.replaceOrAdd(contentsOf: headers)
+        }
+        if let cookie {
+            allHeaders.replaceOrAdd(name: "Cookie", value: cookie)
+        }
+        if let authorization {
+            allHeaders.replaceOrAdd(name: "Authorization", value: authorization)
+        }
+        return allHeaders
     }
+
+}
+
+
+extension HTTPHeaders {
+
+    mutating func replaceOrAdd(contentsOf other: HTTPHeaders) {
+        for (name, value) in other {
+            self.replaceOrAdd(name: name, value: value)
+        }
+    }
+
 }

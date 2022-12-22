@@ -13,7 +13,7 @@ import Logging
 
 extension FlareDNSCommand.Configure {
     
-    struct Auth: ParsableCommand {
+    struct Auth: AsyncParsableCommand {
         
         static let configuration = CommandConfiguration(
             abstract: "Configure Cloudflare authentication",
@@ -22,7 +22,7 @@ extension FlareDNSCommand.Configure {
                 
     }
 
-    struct Records: ParsableCommand {
+    struct Records: AsyncParsableCommand {
         
         static let configuration = CommandConfiguration(
             abstract: "Configure records",
@@ -31,7 +31,7 @@ extension FlareDNSCommand.Configure {
         
     }
     
-    struct Run: ParsableCommand {
+    struct Run: AsyncParsableCommand {
         
         static let configuration = CommandConfiguration(
             abstract: "Configure run options",
@@ -40,7 +40,7 @@ extension FlareDNSCommand.Configure {
         
     }
     
-    struct Check: ParsableCommand {
+    struct Check: AsyncParsableCommand {
         
         static let configuration = CommandConfiguration(
             abstract: "Check configuration. Connects to Cloudflare with configured credentials and checks that the records are available and editable.",

@@ -6,17 +6,31 @@
 //
 
 import ArgumentParser
+import Backtrace
 import ColorizeSwift
 import Foundation
 import Logging
-import PromiseKit
+import AsyncHTTPClient
 
 
-struct FlareDNSCommand: ParsableCommand {
-    
-    static let configuration = CommandConfiguration(abstract: "FlareDNS CLI", subcommands: [Run.self, Configure.self])
-    
-    struct Run: ParsableCommand {
+@main
+struct FlareDNSCommand: AsyncParsableCommand {
+
+    init() {
+        Backtrace.install()
+    }
+
+    private static let subcommands = {
+        var commands: [ParsableCommand.Type] = [Run.self, Configure.self]
+        #if DEBUG
+        commands.append(Debug.self)
+        #endif
+        return commands
+    }()
+
+    static let configuration = CommandConfiguration(abstract: "FlareDNS CLI", subcommands: Self.subcommands)
+
+    struct Run: AsyncParsableCommand {
         
         static let configuration = CommandConfiguration(
             abstract: "Run DNS updater once configured"
@@ -24,56 +38,40 @@ struct FlareDNSCommand: ParsableCommand {
         
         @Option(help: "Interval between each check for IP change") var updateInterval: Int = 3600
         @Flag(help: "Force update the server record, even when no change is detected") var forceUpdate: Bool = false
-        
-        @available(OSX 10.12, *)
-        private func start(_ controller: FlareDNSController) {
-            firstly {
-                controller.run()
-            }
-            .done { messages in
-                for message in messages {
-                    Logger.shared.info("\(message.cyan())")
-                }
-            }
-            .catch { error in
-                Logger.shared.error("\("\(error)".red())")
-            }
-            .finally {
-                Logger.shared.info("---")
-            }
-        }
-        
-        func run() throws {
-            guard #available(OSX 10.12, *) else {
-                print("FlareDNS requires macOS 10.12 or newer to run")
+
+        func run() async throws {
+            var controller: FlareDNSController
+            do {
+                controller = try FlareDNSController(model: FlareDNSModel(config: Config()), ipV4Lookup: IPv4LookupAPI())
+            } catch {
+                print("Unable to start FlareDNS: \(error.localizedDescription)".yellow())
                 return
             }
-            guard let controller = FlareDNSController() else {
-                print("Unable to start FlareDNS: No API token was set.".yellow())
-                return
-            }
-            guard !controller.model.records.isEmpty else {
+            guard await !controller.model.records.isEmpty else {
                 print("FlareDNS has not been configured with any DNS records. Aborting.".yellow())
                 return
             }
             Logger.shared.info("\("Starting FlareDNS".bold())")
             Logger.shared.info("---")
 
-            // TODO: Move timer to controller?
-            start(controller)
-            _ = Timer.scheduledTimer(
-                withTimeInterval: TimeInterval(FlareDNSModel.shared.updateInterval),
-                repeats: true
-            ) { _ in
-                start(controller)
-            }
+            repeat {
+                try await start(controller)
+                try await Task.sleep(for: .seconds(controller.model.updateInterval))
+            } while !Task.isCancelled
+        }
 
-            RunLoop.main.run()
+        private func start(_ controller: FlareDNSController) async throws {
+            do {
+                try await controller.run().log()
+            } catch {
+                Logger.shared.error("\("\(error)".red())")
+            }
+            Logger.shared.info("---")
         }
         
     }
     
-    struct Configure: ParsableCommand {
+    struct Configure: AsyncParsableCommand {
         
         static let configuration = CommandConfiguration(
             abstract: "Configure FlareDNS before running",
@@ -83,3 +81,25 @@ struct FlareDNSCommand: ParsableCommand {
     }
     
 }
+
+#if DEBUG
+
+extension FlareDNSCommand {
+
+    struct Debug: AsyncParsableCommand {
+
+        static let configuration = CommandConfiguration(
+            abstract: "FlareDNS Debug Options"
+        )
+
+        func run() async throws {
+            Logger.shared.info("Debug interface to come")
+
+        }
+
+    }
+
+
+}
+
+#endif

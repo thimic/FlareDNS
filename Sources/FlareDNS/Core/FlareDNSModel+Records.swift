@@ -1,14 +1,13 @@
 //
-//  File.swift
+//  FlareDNSModel+Records.swift
 //  
 //
 //  Created by Michael Thingnes on 3/01/21.
 //
 
+import CollectionConcurrencyKit
 import Foundation
 import Logging
-import PromiseKit
-
 
 extension FlareDNSModel {
     
@@ -42,14 +41,14 @@ extension FlareDNSModel {
             let index = records.firstIndex(of: oldRecord)!
             records.remove(at: index)
         } else {
-            return Swift.Result.failure(
-                FlareDNSError("No records matching record name \"\(recordName)\"")
+            return .failure(
+                FlareDNSError.removeRecordFailed(recordName: recordName)
             )
         }
         
         // Persist records
         persistRecords()
-        return Swift.Result.success("Removed record \"\(filteredRecords.first!.name)\"")
+        return .success("Removed record \"\(filteredRecords.first!.name)\"")
 
     }
     
@@ -84,35 +83,29 @@ extension FlareDNSModel {
                 dataArray.append(encodedRecord)
             }
         }
-        Config.shared.set(dataArray, forKey: "config:records:records")
+        Config().set(dataArray, forKey: "config:records:records")
 
     }
-        
-    func getRecordsWithIds(_ cloudFlareAPI: CloudFlareAPI) -> Promise<[DNSRecord]> {
-        return Promise { seal in
-            cloudFlareAPI.listZones(zoneNames: configZoneNames)
-                .thenFlatMap { zone in
-                    cloudFlareAPI.listDNSRecords(zone: zone)
-                }
-                .done { apiRecords in
-                    var updatedRecords: [DNSRecord] = .init(self.records)
-                    for (index, configRecord) in updatedRecords.enumerated() {
-                        guard let apiRecord = apiRecords.filter({ record in record.name == configRecord.name }).first else {
-                            // TODO: Reject?
-                            Logger.shared.warning("Unable to find record \(configRecord.name) at Cloudflare")
-                            continue
-                        }
-                        var newRecord = configRecord
-                        newRecord.zone.id = apiRecord.zoneID
-                        newRecord.id = apiRecord.id
-                        updatedRecords[index] = newRecord
-                    }
-                    seal.fulfill(updatedRecords)
-                }
-                .catch { error in
-                    seal.reject(error)
-                }
+
+    func getRecordsWithIds(_ cloudFlareAPI: CloudFlareAPI) async throws -> [DNSRecord] {
+        let apiRecords = try await cloudFlareAPI
+            .listZones(zoneNames: configZoneNames)
+            .concurrentFlatMap { zone in
+                try await cloudFlareAPI.listDNSRecords(zone: zone)
+            }
+
+        var updatedRecords: [DNSRecord] = self.records
+        for (index, configRecord) in updatedRecords.enumerated() {
+            guard let apiRecord = apiRecords.filter({ record in record.name == configRecord.name }).first else {
+                // TODO: Reject?
+                Logger.shared.warning("Unable to find record \(configRecord.name) at Cloudflare")
+                continue
+            }
+            var newRecord = configRecord
+            newRecord.zone.id = apiRecord.zoneID
+            newRecord.id = apiRecord.id
+            updatedRecords[index] = newRecord
         }
+        return updatedRecords
     }
-    
 }

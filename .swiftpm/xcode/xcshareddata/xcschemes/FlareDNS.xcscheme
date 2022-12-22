@@ -91,7 +91,11 @@
       <CommandLineArguments>
          <CommandLineArgument
             argument = "configure"
-            isEnabled = "YES">
+            isEnabled = "NO">
+         </CommandLineArgument>
+         <CommandLineArgument
+            argument = "debug"
+            isEnabled = "NO">
          </CommandLineArgument>
          <CommandLineArgument
             argument = "records"
@@ -118,18 +122,41 @@
             isEnabled = "NO">
          </CommandLineArgument>
          <CommandLineArgument
-            argument = "foo"
-            isEnabled = "NO">
+            argument = "run"
+            isEnabled = "YES">
          </CommandLineArgument>
          <CommandLineArgument
             argument = "check"
-            isEnabled = "YES">
+            isEnabled = "NO">
+         </CommandLineArgument>
+         <CommandLineArgument
+            argument = "config"
+            isEnabled = "NO">
+         </CommandLineArgument>
+         <CommandLineArgument
+            argument = "ip"
+            isEnabled = "NO">
          </CommandLineArgument>
       </CommandLineArguments>
       <EnvironmentVariables>
          <EnvironmentVariable
             key = "FLAREDNS_CONFIG"
             value = "/Users/thimic/Desktop"
+            isEnabled = "YES">
+         </EnvironmentVariable>
+         <EnvironmentVariable
+            key = "FLAREDNS_UNIFI_ALLOW_SELF_SIGNED_CERT"
+            value = "true"
+            isEnabled = "YES">
+         </EnvironmentVariable>
+         <EnvironmentVariable
+            key = "FLAREDNS_UNIFI_PASSWORD"
+            value = "229vroms"
+            isEnabled = "YES">
+         </EnvironmentVariable>
+         <EnvironmentVariable
+            key = "FLAREDNS_UNIFI_USERNAME"
+            value = "thimic"
             isEnabled = "YES">
          </EnvironmentVariable>
       </EnvironmentVariables>
